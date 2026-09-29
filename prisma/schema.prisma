@@ -1,0 +1,378 @@
+// ==============================================================================
+// IS-Guide AI — Prisma Database Schema
+// AI-Powered Recommendation Engine for Identifying Applicable Indian Standards
+// Target Database: Supabase PostgreSQL
+// ==============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ------------------------------------------------------------------------------
+// ENUMS
+// ------------------------------------------------------------------------------
+
+enum InputType {
+  TEXT
+  PDF
+  DOCX
+}
+
+enum AnalysisStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum RequirementCategory {
+  PRODUCT
+  APPLICATION
+  MATERIAL
+  DIMENSION
+  PERFORMANCE
+  SAFETY
+  ENVIRONMENT
+  TESTING
+  ELECTRICAL
+  CERTIFICATION
+  OTHER
+}
+
+enum StandardStatus {
+  ACTIVE
+  WITHDRAWN
+  SUPERSEDED
+  DRAFT
+  UNKNOWN
+}
+
+enum VersionStatus {
+  CURRENT
+  HISTORICAL
+  SUPERSEDED
+  UNKNOWN
+}
+
+enum RelationshipType {
+  NORMATIVE_REFERENCE
+  TEST_METHOD
+  SAFETY
+  INSTALLATION
+  TERMINOLOGY
+  RELATED_PRODUCT
+  RELATED_STANDARD
+  SUPERSEDES
+  AMENDS
+}
+
+enum EvidenceType {
+  SPECIFICATION_MATCH
+  SCOPE_MATCH
+  TECHNICAL_MATCH
+  RELATIONSHIP
+  VERSION
+  OTHER
+}
+
+enum CertificationStatus {
+  ACTIVE
+  INACTIVE
+  UNKNOWN
+}
+
+enum CertificationCheckStatus {
+  IDENTIFIED
+  NOT_IDENTIFIED
+  REVIEW_REQUIRED
+}
+
+// ------------------------------------------------------------------------------
+// 1. USER MODEL
+// ------------------------------------------------------------------------------
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  analyses ProcurementAnalysis[]
+
+  @@map("users")
+}
+
+// ------------------------------------------------------------------------------
+// 2. PROCUREMENT ANALYSIS
+// ------------------------------------------------------------------------------
+
+model ProcurementAnalysis {
+  id        String         @id @default(cuid())
+  userId    String?
+  title     String
+  inputType InputType      @default(TEXT)
+  rawInput  String         @db.Text
+  language  String?        @default("en")
+  status    AnalysisStatus @default(PENDING)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  user            User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  documents       ProcurementDocument[]
+  requirements    ExtractedRequirement[]
+  recommendations Recommendation[]
+  certifications  AnalysisCertification[]
+  reports         Report[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([userId])
+  @@map("procurement_analyses")
+}
+
+// ------------------------------------------------------------------------------
+// 3. PROCUREMENT DOCUMENT
+// ------------------------------------------------------------------------------
+
+model ProcurementDocument {
+  id            String   @id @default(cuid())
+  analysisId    String
+  fileName      String
+  fileType      String
+  fileSize      Int?
+  fileUrl       String?
+  extractedText String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  analysis ProcurementAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@index([analysisId])
+  @@map("procurement_documents")
+}
+
+// ------------------------------------------------------------------------------
+// 4. EXTRACTED REQUIREMENT
+// ------------------------------------------------------------------------------
+
+model ExtractedRequirement {
+  id          String              @id @default(cuid())
+  analysisId  String
+  category    RequirementCategory @default(OTHER)
+  name        String
+  value       String
+  unit        String?
+  description String?             @db.Text
+  confidence  Float?
+  createdAt   DateTime            @default(now())
+
+  analysis ProcurementAnalysis      @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  evidence RecommendationEvidence[]
+
+  @@index([analysisId])
+  @@index([category])
+  @@map("extracted_requirements")
+}
+
+// ------------------------------------------------------------------------------
+// 5. STANDARD (INDIAN STANDARDS - VERIFIED REGISTRY)
+// ------------------------------------------------------------------------------
+
+model Standard {
+  id             String         @id @default(cuid())
+  standardNumber String         @unique // e.g. "IS 456", "IS 16190" (Verified Indian Standard Identifier)
+  title          String
+  shortTitle     String?
+  category       String?
+  scope          String?        @db.Text
+  status         StandardStatus @default(ACTIVE)
+  language       String?        @default("en")
+  sourceUrl      String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  versions              StandardVersion[]
+  amendments            StandardAmendment[]
+  outgoingRelationships StandardRelationship[] @relation("OutgoingStandardRelation")
+  incomingRelationships StandardRelationship[] @relation("IncomingStandardRelation")
+  recommendations       Recommendation[]
+
+  @@index([standardNumber])
+  @@index([status])
+  @@index([category])
+  @@map("standards")
+}
+
+// ------------------------------------------------------------------------------
+// 6. STANDARD VERSION
+// ------------------------------------------------------------------------------
+
+model StandardVersion {
+  id              String        @id @default(cuid())
+  standardId      String
+  versionLabel    String // e.g. "2000", "2024"
+  publicationDate DateTime?
+  effectiveDate   DateTime?
+  status          VersionStatus @default(CURRENT)
+  documentUrl     String?
+  createdAt       DateTime      @default(now())
+
+  standard Standard @relation(fields: [standardId], references: [id], onDelete: Cascade)
+
+  @@unique([standardId, versionLabel])
+  @@index([standardId])
+  @@map("standard_versions")
+}
+
+// ------------------------------------------------------------------------------
+// 7. STANDARD AMENDMENT
+// ------------------------------------------------------------------------------
+
+model StandardAmendment {
+  id              String    @id @default(cuid())
+  standardId      String
+  amendmentNumber String // e.g. "Amendment 1", "Amd. 2"
+  title           String?
+  publicationDate DateTime?
+  description     String?   @db.Text
+  documentUrl     String?
+  createdAt       DateTime  @default(now())
+
+  standard Standard @relation(fields: [standardId], references: [id], onDelete: Cascade)
+
+  @@index([standardId])
+  @@map("standard_amendments")
+}
+
+// ------------------------------------------------------------------------------
+// 8. STANDARD RELATIONSHIP (CROSS-STANDARDS GRAPH)
+// ------------------------------------------------------------------------------
+
+model StandardRelationship {
+  id               String           @id @default(cuid())
+  sourceStandardId String
+  targetStandardId String
+  relationshipType RelationshipType
+  description      String?          @db.Text
+  sourceReference  String?
+  createdAt        DateTime         @default(now())
+
+  sourceStandard Standard @relation("OutgoingStandardRelation", fields: [sourceStandardId], references: [id], onDelete: Cascade)
+  targetStandard Standard @relation("IncomingStandardRelation", fields: [targetStandardId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceStandardId, targetStandardId, relationshipType])
+  @@index([sourceStandardId])
+  @@index([targetStandardId])
+  @@index([relationshipType])
+  @@map("standard_relationships")
+}
+
+// ------------------------------------------------------------------------------
+// 9. RECOMMENDATION
+// ------------------------------------------------------------------------------
+
+model Recommendation {
+  id              String   @id @default(cuid())
+  analysisId      String
+  standardId      String
+  rank            Int
+  relevanceScore  Float?
+  confidenceScore Float?
+  reason          String?  @db.Text
+  createdAt       DateTime @default(now())
+
+  analysis ProcurementAnalysis      @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  standard Standard                 @relation(fields: [standardId], references: [id], onDelete: Restrict)
+  evidence RecommendationEvidence[]
+
+  @@index([analysisId])
+  @@index([standardId])
+  @@map("recommendations")
+}
+
+// ------------------------------------------------------------------------------
+// 10. RECOMMENDATION EVIDENCE
+// ------------------------------------------------------------------------------
+
+model RecommendationEvidence {
+  id               String       @id @default(cuid())
+  recommendationId String
+  requirementId    String?
+  evidenceType     EvidenceType
+  evidenceText     String       @db.Text
+  sourceReference  String?
+  createdAt        DateTime     @default(now())
+
+  recommendation Recommendation        @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  requirement    ExtractedRequirement? @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+
+  @@index([recommendationId])
+  @@index([requirementId])
+  @@map("recommendation_evidences")
+}
+
+// ------------------------------------------------------------------------------
+// 11. CERTIFICATION REQUIREMENT
+// ------------------------------------------------------------------------------
+
+model CertificationRequirement {
+  id          String              @id @default(cuid())
+  name        String
+  description String?             @db.Text
+  category    String?
+  sourceUrl   String?
+  status      CertificationStatus @default(ACTIVE)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  analysisCertifications AnalysisCertification[]
+
+  @@index([name])
+  @@index([category])
+  @@map("certification_requirements")
+}
+
+// ------------------------------------------------------------------------------
+// 12. ANALYSIS CERTIFICATION
+// ------------------------------------------------------------------------------
+
+model AnalysisCertification {
+  id                         String                   @id @default(cuid())
+  analysisId                 String
+  certificationRequirementId String
+  status                     CertificationCheckStatus @default(REVIEW_REQUIRED)
+  reason                     String?                  @db.Text
+  createdAt                  DateTime                 @default(now())
+
+  analysis                 ProcurementAnalysis      @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  certificationRequirement CertificationRequirement @relation(fields: [certificationRequirementId], references: [id], onDelete: Restrict)
+
+  @@unique([analysisId, certificationRequirementId])
+  @@index([analysisId])
+  @@index([certificationRequirementId])
+  @@map("analysis_certifications")
+}
+
+// ------------------------------------------------------------------------------
+// 13. REPORT
+// ------------------------------------------------------------------------------
+
+model Report {
+  id         String   @id @default(cuid())
+  analysisId String
+  title      String
+  content    String?  @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  analysis ProcurementAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@index([analysisId])
+  @@map("reports")
+}

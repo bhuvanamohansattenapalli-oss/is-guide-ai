@@ -1,9 +1,11 @@
 import { prisma } from '@/lib/prisma'
 import { StandardsQueryInput, SearchStandardsQueryInput } from '@/lib/validations/standards'
 import { Prisma, StandardStatus } from '@prisma/client'
+import { VERIFIED_STANDARDS_CATALOG } from '@/lib/data/verified-standards'
 
 /**
  * Service handling Indian Standards catalog queries
+ * Uses Supabase/PostgreSQL when reachable, with authoritative fallback to the verified standards dataset.
  */
 export class StandardsService {
   /**
@@ -35,27 +37,32 @@ export class StandardsService {
     }
 
     try {
-      const [standards, total] = await Promise.all([
-        prisma.standard.findMany({
-          where,
-          skip,
-          take: limit,
-          orderBy: { standardNumber: 'asc' },
-          include: {
-            versions: {
-              where: { status: 'CURRENT' },
-              take: 1,
-              orderBy: { createdAt: 'desc' },
+      const [standards, total] = await Promise.race([
+        Promise.all([
+          prisma.standard.findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: { standardNumber: 'asc' },
+            include: {
+              versions: {
+                where: { status: 'CURRENT' },
+                take: 1,
+                orderBy: { createdAt: 'desc' },
+              },
             },
-          },
-        }),
-        prisma.standard.count({ where }),
+          }),
+          prisma.standard.count({ where }),
+        ]),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Prisma query timeout')), 2500)
+        ),
       ])
 
       const totalPages = Math.ceil(total / limit)
 
       return {
-        data: standards,
+        data: standards as any[],
         pagination: {
           page,
           limit,
@@ -63,16 +70,39 @@ export class StandardsService {
           totalPages,
         },
       }
-    } catch (error) {
-      // If database is empty or not yet connected, return empty response gracefully
-      console.warn('[StandardsService.getStandards] Database query fallback:', error)
+    } catch {
+      // Authoritative fallback to verified standards catalog
+      let filtered = [...VERIFIED_STANDARDS_CATALOG]
+
+      if (category) {
+        filtered = filtered.filter(
+          (s) => s.category.toLowerCase() === category.toLowerCase()
+        )
+      }
+      if (status) {
+        filtered = filtered.filter((s) => s.status === status)
+      }
+      if (search) {
+        const sLower = search.toLowerCase()
+        filtered = filtered.filter(
+          (s) =>
+            s.standardNumber.toLowerCase().includes(sLower) ||
+            s.title.toLowerCase().includes(sLower) ||
+            (s.shortTitle && s.shortTitle.toLowerCase().includes(sLower))
+        )
+      }
+
+      const total = filtered.length
+      const paginated = filtered.slice(skip, skip + limit)
+      const totalPages = Math.ceil(total / limit)
+
       return {
-        data: [],
+        data: paginated as any[],
         pagination: {
           page,
           limit,
-          total: 0,
-          totalPages: 0,
+          total,
+          totalPages,
         },
       }
     }
@@ -83,51 +113,63 @@ export class StandardsService {
    */
   static async getStandardById(id: string) {
     try {
-      const standard = await prisma.standard.findFirst({
-        where: {
-          OR: [{ id }, { standardNumber: id }],
-        },
-        include: {
-          versions: {
-            orderBy: { publicationDate: 'desc' },
+      const standard = await Promise.race([
+        prisma.standard.findFirst({
+          where: {
+            OR: [{ id }, { standardNumber: id }],
           },
-          amendments: {
-            orderBy: { publicationDate: 'desc' },
-          },
-          outgoingRelationships: {
-            include: {
-              targetStandard: {
-                select: {
-                  id: true,
-                  standardNumber: true,
-                  title: true,
-                  status: true,
-                  category: true,
+          include: {
+            versions: {
+              orderBy: { publicationDate: 'desc' },
+            },
+            amendments: {
+              orderBy: { publicationDate: 'desc' },
+            },
+            outgoingRelationships: {
+              include: {
+                targetStandard: {
+                  select: {
+                    id: true,
+                    standardNumber: true,
+                    title: true,
+                    status: true,
+                    category: true,
+                  },
+                },
+              },
+            },
+            incomingRelationships: {
+              include: {
+                sourceStandard: {
+                  select: {
+                    id: true,
+                    standardNumber: true,
+                    title: true,
+                    status: true,
+                    category: true,
+                  },
                 },
               },
             },
           },
-          incomingRelationships: {
-            include: {
-              sourceStandard: {
-                select: {
-                  id: true,
-                  standardNumber: true,
-                  title: true,
-                  status: true,
-                  category: true,
-                },
-              },
-            },
-          },
-        },
-      })
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Prisma query timeout')), 2500)
+        ),
+      ])
 
-      return standard
-    } catch (error) {
-      console.warn('[StandardsService.getStandardById] Database query fallback:', error)
-      return null
+      if (standard) return standard
+    } catch {
+      // Fallback
     }
+
+    const cleanId = id.toLowerCase().trim()
+    const found = VERIFIED_STANDARDS_CATALOG.find(
+      (s) =>
+        s.id.toLowerCase() === cleanId ||
+        s.standardNumber.toLowerCase() === cleanId
+    )
+    return found || null
   }
 
   /**
@@ -148,26 +190,31 @@ export class StandardsService {
     }
 
     try {
-      const [standards, total] = await Promise.all([
-        prisma.standard.findMany({
-          where,
-          skip,
-          take: limit,
-          orderBy: { standardNumber: 'asc' },
-          include: {
-            versions: {
-              where: { status: 'CURRENT' },
-              take: 1,
+      const [standards, total] = await Promise.race([
+        Promise.all([
+          prisma.standard.findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: { standardNumber: 'asc' },
+            include: {
+              versions: {
+                where: { status: 'CURRENT' },
+                take: 1,
+              },
             },
-          },
-        }),
-        prisma.standard.count({ where }),
+          }),
+          prisma.standard.count({ where }),
+        ]),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Prisma search timeout')), 2500)
+        ),
       ])
 
       const totalPages = Math.ceil(total / limit)
 
       return {
-        data: standards,
+        data: standards as any[],
         pagination: {
           page,
           limit,
@@ -175,15 +222,28 @@ export class StandardsService {
           totalPages,
         },
       }
-    } catch (error) {
-      console.warn('[StandardsService.searchStandards] Database search fallback:', error)
+    } catch {
+      const sLower = search.toLowerCase()
+      const filtered = VERIFIED_STANDARDS_CATALOG.filter(
+        (s) =>
+          s.standardNumber.toLowerCase().includes(sLower) ||
+          s.title.toLowerCase().includes(sLower) ||
+          (s.shortTitle && s.shortTitle.toLowerCase().includes(sLower)) ||
+          s.scope.toLowerCase().includes(sLower) ||
+          s.category.toLowerCase().includes(sLower)
+      )
+
+      const total = filtered.length
+      const paginated = filtered.slice(skip, skip + limit)
+      const totalPages = Math.ceil(total / limit)
+
       return {
-        data: [],
+        data: paginated as any[],
         pagination: {
           page,
           limit,
-          total: 0,
-          totalPages: 0,
+          total,
+          totalPages,
         },
       }
     }

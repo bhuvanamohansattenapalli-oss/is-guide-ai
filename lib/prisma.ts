@@ -6,7 +6,7 @@
 import { PrismaClient } from '@prisma/client'
 
 const prismaClientSingleton = () => {
-  const dbUrl = process.env.DIRECT_URL || process.env.DATABASE_URL
+  const dbUrl = process.env.DATABASE_URL || process.env.DIRECT_URL
   return new PrismaClient({
     datasources: dbUrl ? { db: { url: dbUrl } } : undefined,
     log:

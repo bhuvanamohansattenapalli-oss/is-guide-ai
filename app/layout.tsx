@@ -1,10 +1,12 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import { AuthProvider } from '@/lib/auth/auth-context'
 
 export const metadata: Metadata = {
-  title: 'IS-Guide AI | Indian Standards Intelligence',
-  description: 'AI-powered procurement intelligence for identifying applicable Indian Standards.',
+  title: 'IS-Guide AI | Indian Standards Intelligence Platform',
+  description:
+    'AI-powered assistance for procurement specifications, Indian Standards, compliance, and tender preparation.',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -41,7 +43,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

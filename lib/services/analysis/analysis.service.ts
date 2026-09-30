@@ -4,7 +4,7 @@ import { InputType, AnalysisStatus } from '@prisma/client'
 import { RecommendationService, RecommendationResult } from '@/lib/services/recommendations/recommendation.service'
 
 // In-memory cache for development/testing when PostgreSQL is offline or unconfigured
-const devAnalysisStore = new Map<string, any>()
+export const devAnalysisStore = new Map<string, any>()
 
 /**
  * Service managing Procurement Analysis workflows
@@ -14,40 +14,76 @@ export class AnalysisService {
    * Create a new procurement specification analysis record and execute full recommendation pipeline
    */
   static async createAnalysis(input: CreateAnalysisInput, userId?: string) {
+    let analysis: any = null
     try {
-      const analysis = await prisma.procurementAnalysis.create({
-        data: {
-          title: input.title,
-          inputType: (input.inputType || 'TEXT') as InputType,
-          rawInput: input.rawInput,
-          language: input.language || 'en',
-          status: AnalysisStatus.PENDING,
-          userId: userId || null,
-        },
-      })
-
-      // Run recommendation pipeline
-      let pipelineResult: RecommendationResult | null = null
-      try {
-        pipelineResult = await RecommendationService.processAnalysis(analysis.id)
-      } catch (err) {
-        console.error('[AnalysisService] Recommendation pipeline error:', err)
-      }
-
-      // Return unified analysis response
-      return {
-        ...analysis,
-        status: pipelineResult ? AnalysisStatus.COMPLETED : AnalysisStatus.PENDING,
-        requirements: pipelineResult?.requirements || [],
-        recommendations: pipelineResult?.recommendations || [],
-        certifications: pipelineResult?.certifications || [],
-        warnings: pipelineResult?.warnings || [],
-        report: pipelineResult?.report || null,
-      }
+      analysis = await Promise.race([
+        prisma.procurementAnalysis.create({
+          data: {
+            title: input.title,
+            inputType: (input.inputType || 'TEXT') as InputType,
+            rawInput: input.rawInput,
+            language: input.language || 'en',
+            status: AnalysisStatus.PENDING,
+            userId: userId || null,
+            ...(input.fileName
+              ? {
+                  documents: {
+                    create: {
+                      fileName: input.fileName,
+                      fileType: input.fileType || 'application/octet-stream',
+                      fileSize: input.fileSize || null,
+                      extractedText: input.rawInput.slice(0, 50000),
+                    },
+                  },
+                }
+              : {}),
+          },
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Prisma create analysis timeout')), 3000)
+        ),
+      ])
     } catch (error) {
-      console.warn('[AnalysisService] Database insert failed, using fallback:', (error as Error).message)
-      throw error
+      console.warn('[AnalysisService] Database insert failed, using in-memory store:', (error as Error).message)
+      const fallbackId = `analysis_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+      analysis = {
+        id: fallbackId,
+        title: input.title,
+        inputType: (input.inputType || 'TEXT') as InputType,
+        rawInput: input.rawInput,
+        language: input.language || 'en',
+        status: AnalysisStatus.PENDING,
+        userId: userId || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+      devAnalysisStore.set(fallbackId, analysis)
     }
+
+    // Run recommendation pipeline
+    let pipelineResult: RecommendationResult | null = null
+    try {
+      pipelineResult = await RecommendationService.processAnalysis(analysis.id)
+    } catch (err) {
+      console.error('[AnalysisService] Recommendation pipeline error:', err)
+    }
+
+    // Return unified analysis response
+    const finalResponse = {
+      ...analysis,
+      status: pipelineResult ? AnalysisStatus.COMPLETED : AnalysisStatus.PENDING,
+      requirements: pipelineResult?.requirements || [],
+      recommendations: pipelineResult?.recommendations || [],
+      certifications: pipelineResult?.certifications || [],
+      warnings: pipelineResult?.warnings || [],
+      report: pipelineResult?.report || null,
+    }
+
+    if (devAnalysisStore.has(analysis.id)) {
+      devAnalysisStore.set(analysis.id, finalResponse)
+    }
+
+    return finalResponse
   }
 
   /**

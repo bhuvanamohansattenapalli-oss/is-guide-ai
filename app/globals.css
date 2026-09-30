@@ -2285,3 +2285,35 @@ button {
   --color-border: var(--line-subtle);
   --color-ring: var(--primary-blue);
 }
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+  .sidebar,
+  .topbar,
+  .ambient,
+  .assistant-trigger,
+  .assistant-panel,
+  .hero-actions,
+  .modal-backdrop,
+  .no-print {
+    display: none !important;
+  }
+  .app-shell,
+  .main-area,
+  .content-wrap {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .glass-card {
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: 1px solid #cbd5e1 !important;
+    break-inside: avoid;
+    margin-bottom: 16px !important;
+  }
+}

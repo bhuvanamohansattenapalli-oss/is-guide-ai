@@ -15,6 +15,9 @@ export const createAnalysisSchema = z.object({
     .min(1, 'Specification content cannot be empty')
     .max(100000, 'Specification content exceeds maximum allowed size (100,000 characters)'),
   language: z.string().trim().max(10).optional().default('en'),
+  fileName: z.string().trim().optional(),
+  fileType: z.string().trim().optional(),
+  fileSize: z.number().int().optional(),
 })
 
 export type CreateAnalysisInput = z.infer<typeof createAnalysisSchema>

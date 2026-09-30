@@ -6,6 +6,18 @@ import { VerifiedStandardRecord } from '@/lib/data/verified-standards'
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash'
 const DEFAULT_TIMEOUT_MS = 5000
 
+export interface CopilotMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface CopilotOptions {
+  conversationHistory?: CopilotMessage[]
+  currentAnalysisContext?: string
+  language?: string
+  isStandardsQuery?: boolean
+}
+
 // ============================================================================
 // ZOD SCHEMAS FOR STRUCTURED GEMINI VALIDATION
 // ============================================================================
@@ -108,64 +120,69 @@ export class GeminiService {
       return null
     }
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`
+    const modelsToTry = [
+      GEMINI_MODEL,
+      'gemini-3.5-flash',
+      'gemini-3.1-flash-lite',
+    ].filter((v, i, a) => a.indexOf(v) === i)
 
-    try {
-      const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), timeoutMs)
+    for (const model of modelsToTry) {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: prompt }],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.1,
-            responseMimeType: 'application/json',
-          },
-        }),
-      })
-
-      clearTimeout(timer)
-
-      if (!response.ok) {
-        console.warn(`[GeminiService] HTTP ${response.status} from model ${GEMINI_MODEL}, triggering deterministic fallback`)
-        return null
-      }
-
-      const json = await response.json()
-      const candidateText = json?.candidates?.[0]?.content?.parts?.[0]?.text
-      if (!candidateText || typeof candidateText !== 'string') {
-        console.warn('[GeminiService] Empty candidate text in response, triggering fallback')
-        return null
-      }
-
-      let parsedJson: unknown
       try {
-        parsedJson = JSON.parse(candidateText.trim())
-      } catch (parseErr) {
-        console.warn('[GeminiService] JSON parse error in model output, triggering fallback:', (parseErr as Error).message)
-        return null
-      }
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), timeoutMs)
 
-      const validation = schema.safeParse(parsedJson)
-      if (!validation.success) {
-        console.warn('[GeminiService] Schema validation failed for model response:', validation.error.format())
-        return null
-      }
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: prompt }],
+              },
+            ],
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: 'application/json',
+            },
+          }),
+        })
 
-      return validation.data
-    } catch (err) {
-      const errorMsg = (err as Error).name === 'AbortError' ? 'Timeout exceeded' : (err as Error).message
-      console.warn(`[GeminiService] Call failed (${errorMsg}), triggering deterministic fallback`)
-      return null
+        clearTimeout(timer)
+
+        if (!response.ok) {
+          console.warn(`[GeminiService] HTTP ${response.status} from model ${model}, trying next model`)
+          continue
+        }
+
+        const json = await response.json()
+        const candidateText = json?.candidates?.[0]?.content?.parts?.[0]?.text
+        if (!candidateText || typeof candidateText !== 'string') {
+          continue
+        }
+
+        let parsedJson: unknown
+        try {
+          parsedJson = JSON.parse(candidateText.trim())
+        } catch (parseErr) {
+          continue
+        }
+
+        const validation = schema.safeParse(parsedJson)
+        if (!validation.success) {
+          continue
+        }
+
+        return validation.data
+      } catch (err) {
+        continue
+      }
     }
+
+    return null
   }
 
   /**
@@ -326,96 +343,207 @@ Respond strictly in valid JSON matching this schema:
 
   /**
    * 3. Grounded Conversational Copilot for "Ask IS-Guide AI" (/api/assistant/chat)
-   * Powered by Gemini 3.6 Flash.
-   * Grounded strictly in candidate standards retrieved from the database.
+   * Dual-mode conversational assistant:
+   * Mode 1: General conversation, mathematics, programming, general tech/science/educational questions.
+   * Mode 2: Procurement & Indian Standards intelligence, strictly grounded in verified database records.
    */
   static async generateCopilotResponse(
     question: string,
     candidateStandards: VerifiedStandardRecord[],
-    options?: {
-      currentAnalysisContext?: string
-      language?: string
-    }
+    options?: CopilotOptions
   ): Promise<string | null> {
     const apiKey = this.getApiKey()
     if (!apiKey) return null
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`
-
-    let standardsContext = ''
-    if (candidateStandards.length > 0) {
-      standardsContext = candidateStandards
-        .map(
-          (s) =>
-            `- ${s.standardNumber}: ${s.title} [Category: ${s.category}]. Current Version: ${s.currentVersion?.versionLabel || 'Active'}. Scope: ${s.scope}. Related Standards: ${s.outgoingRelationships.map((r) => `${r.relationshipType}: ${r.targetStandard.standardNumber}`).join(', ') || 'None'}`
-        )
-        .join('\n')
-    } else {
-      standardsContext = 'No matching Indian Standards found in the verified database for this specific query.'
-    }
-
     const targetLang = options?.language || 'en'
 
-    const prompt = `You are the IS-Guide AI Procurement Intelligence Assistant powered by Gemini 3.6 Flash for India's Bureau of Indian Standards (BIS) and public procurement intelligence.
-You function as a versatile, expert conversational AI chatbot capable of answering ANY user query, including:
-- Technical specifications, engineering parameters, material grades, and tolerances.
-- Public procurement procedures, tender drafting, bid evaluation criteria, GeM portal norms, and GFR (General Financial Rules).
-- Bureau of Indian Standards (BIS), ISI Mark, Compulsory Registration Scheme (CRS), and Quality Control Orders (QCO).
-- Comparisons between technologies, products, standards, and testing methods.
-- General questions, explanations, greetings, and conversational assistance.
+    const systemInstructionText = `You are IS-Guide AI, a helpful general-purpose conversational AI assistant with specialized expertise in Indian procurement standards.
 
-User Question: "${question}"
+Answer general questions normally, including mathematics, programming, science, technology, education, and everyday questions.
 
-GROUNDING STANDARDS IN VERIFIED DATABASE (if applicable):
-${standardsContext}
+When the user asks about Indian Standards, procurement specifications, BIS standards, certification, QCOs, normative references, or related procurement compliance, use the verified IS-Guide AI knowledge base and available analysis context.
 
-${options?.currentAnalysisContext ? `Additional Tender Context:\n${options.currentAnalysisContext}` : ''}
+Never fabricate an Indian Standard number, title, version, amendment, certification requirement, or regulatory claim.
 
-CAPABILITIES & GROUNDING RULES:
-1. Act as a friendly, expert, helpful, and highly articulate chatbot. Answer the user's question directly, clearly, and thoroughly.
-2. If the user asks general questions, technical concepts, procurement best practices, or drafting assistance, answer knowledgeably and comprehensively.
-3. When referencing Indian Standards (BIS), prioritize the verified standards listed above and NEVER invent or hallucinate non-existent Indian Standard numbers.
-4. Support English, Hindi (हिन्दी), and Telugu (తెలుగు) based on the user's question language and target interface language (${targetLang}):
-   - If the user asks in Hindi or target interface language is 'hi', answer naturally and thoroughly in Hindi (हिन्दी).
-   - If the user asks in Telugu or target interface language is 'te', answer naturally and thoroughly in Telugu (తెలుగు).
-   - Otherwise, answer in clear technical English.
-5. In ALL languages, preserve official Indian Standard identifiers in Latin script standard format (e.g., "IS 4984", "IS 456", "IS 10322", "IS 1786") and official standard titles unchanged.
-6. If the question pertains to procurement tenders or standards compliance, end your response with this advisory note:
-"*Recommendations are intended to assist procurement review and should be verified against the latest applicable official standards and regulatory requirements.*"`
+Clearly distinguish verified database information from general knowledge.
 
-    try {
-      const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)
+Be concise for simple questions and provide detailed explanations when the user asks for them.
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.15,
-            maxOutputTokens: 800,
-          },
-        }),
-      })
+Maintain conversational context and answer follow-up questions naturally.
 
-      clearTimeout(timer)
+Respect the user's selected language.
 
-      if (!response.ok) {
-        console.warn(`[GeminiService.generateCopilotResponse] HTTP ${response.status}, using deterministic fallback`)
-        return null
-      }
+============================================================
+CORE BEHAVIOR & MODES
+============================================================
 
-      const resData = await response.json()
-      const answerText = resData?.candidates?.[0]?.content?.parts?.[0]?.text
-      if (answerText && typeof answerText === 'string' && answerText.trim()) {
-        return answerText.trim()
-      }
-      return null
-    } catch (err) {
-      console.warn('[GeminiService.generateCopilotResponse] Call note, using deterministic fallback:', (err as Error).message)
-      return null
+MODE 1 — GENERAL CONVERSATION:
+- Answer ordinary, general, educational, and technical questions naturally, accurately, and conversationally.
+- Never respond: "I can only answer procurement questions." You behave as a genuine general AI assistant.
+- Examples:
+  - User: "Hello" -> Friendly greeting.
+  - User: "How are you?" -> "I'm doing well! How can I help you today?"
+  - User: "What is 1 + 1?" -> "1 + 1 = 2" (or "2")
+  - User: "What is Python?" -> Explain Python as a popular high-level programming language.
+  - User: "What is React?" -> Explain React as a front-end JavaScript library for user interfaces.
+  - User: "What is an API?" -> Explain Application Programming Interfaces clearly.
+  - User: "What is PostgreSQL?" -> Explain PostgreSQL as an open-source object-relational database.
+  - User: "What is machine learning?" -> Explain machine learning clearly.
+  - User: "What is cloud computing?" -> Explain cloud computing clearly.
+  - User: "What is a database?" -> Explain databases clearly.
+  - User: "What is GitHub?" -> Explain GitHub clearly.
+  - User: "Explain HTTP in simple words." -> Explain HTTP in simple terms.
+  - User: "What is artificial intelligence?" -> Explain AI clearly.
+  - User: "Explain procurement in simple words." -> Explain procurement in clear, simple terms.
+  - User: "What is BIS?" -> Provide a clear factual explanation of the Bureau of Indian Standards (the National Standards Body of India established under the BIS Act 2016).
+  - User: "Tell me a joke." -> Natural conversational joke.
+- Mathematical Questions:
+  - Answer calculations naturally (e.g. 1 + 1, 25 * 4, 100 / 5, 10% of 500, 25% of 800, sqrt(144), simple algebra, unit conversions).
+  - For straightforward calculations, give the correct answer directly.
+  - For more complex calculations, show the calculation steps clearly when useful.
+  - Do NOT force mathematical questions through standards recommendations.
+
+MODE 2 — PROCUREMENT / INDIAN-STANDARDS ASSISTANCE:
+- When the user asks about Indian Standards, procurement specifications, BIS standards, certification, QCOs, normative references, allied standards, or related procurement compliance:
+  - Ground your answer in the verified standards database provided in your context.
+  - When the user asks which Indian Standard applies to a product or material:
+    CRITICAL ZERO-HALLUCINATION RULE:
+    You MUST ONLY recommend standards from the verified standards database provided in your context.
+    If the verified database records provided in your context do NOT contain an applicable standard for that product or material, you MUST state:
+    "I don't have sufficient verified standards data in the current IS-Guide AI knowledge base to make a reliable recommendation. Please verify against the latest official BIS sources."
+    NEVER invent, hallucinate, or fabricate an Indian Standard number, title, version, amendment, certification requirement, or regulatory claim.
+  - When verified standards are provided in context, explain their scope, current edition/version, amendments, certification requirements (ISI mark / CRS / QCO), and normative relationships accurately.
+  - When asked about "allied standards", explain the concept of allied / companion / normative reference standards and detail any related standards linked in the context.
+  - When asked to "Analyze this procurement specification", evaluate the tender specification or active analysis context against verified standards, identifying gaps, mandatory standards, and test requirements.
+
+CONVERSATIONAL CONTEXT & ACTIVE ANALYSIS:
+- Maintain conversational memory across turns within the session.
+- Understand follow-up references naturally (e.g., if the user previously asked about a water pipeline and asks "What about the test requirements?", understand it refers to water pipes; if the user asks "Explain IS 4984" and then "What is its current version?", answer about IS 4984; if the user asks "Explain this in simple words.", simplify the previous explanation).
+- When active procurement analysis context is provided, answer questions regarding its title, extracted requirements, recommended standards, scores, and specification gaps.
+
+LANGUAGE RULES:
+- Target language: ${targetLang} ('en', 'hi', or 'te').
+- If 'hi' is selected or user asks in Hindi, answer in Hindi (हिन्दी).
+- If 'te' is selected or user asks in Telugu, answer in Telugu (తెలుగు).
+- CRITICAL: Technical identifiers such as "IS 456", "IS 4984", "IS 10322", "IS 4926", "IS 1786", "IS 2062", "BIS", "CRS", "QCO", "API", "PostgreSQL", "React", "Python", etc. MUST ALWAYS remain in standard Latin script unchanged in all languages.`
+
+    // 1. Build context additions
+    let contextBlock = ''
+    if (candidateStandards.length > 0) {
+      contextBlock +=
+        `\n\n[VERIFIED STANDARDS DATABASE RECORDS IN CONTEXT]:\n` +
+        candidateStandards
+          .map((s) => {
+            const related =
+              s.outgoingRelationships
+                ?.map((r) => `${r.relationshipType}: ${r.targetStandard?.standardNumber} (${r.targetStandard?.title})`)
+                .join('; ') || 'None'
+            const currentVer = s.currentVersion?.versionLabel || 'Current Edition'
+            const amendments =
+              s.amendments?.map((a) => `${a.amendmentNumber}: ${a.description}`).join('; ') || 'None'
+            return `- ${s.standardNumber}: ${s.title} [Category: ${s.category || 'Standard'}]. Current Version: ${currentVer}. Amendments: ${amendments}. Scope: ${s.scope || 'N/A'}. Allied/Related Standards: ${related}`
+          })
+          .join('\n')
+    } else if (options?.isStandardsQuery) {
+      contextBlock += `\n\n[VERIFIED STANDARDS DATABASE RECORDS IN CONTEXT]:\nNo matching Indian Standards found in the verified database for this specific item.`
     }
+
+    if (options?.currentAnalysisContext) {
+      contextBlock += `\n\n[ACTIVE PROCUREMENT ANALYSIS CONTEXT]:\n${options.currentAnalysisContext}`
+    }
+
+    const currentTurnText = `${question}${contextBlock}`
+
+    // 2. Build multi-turn contents array with proper role alternation
+    const rawTurns: Array<{ role: 'user' | 'model'; text: string }> = []
+
+    if (options?.conversationHistory && options.conversationHistory.length > 0) {
+      // Include up to last 8 turns of conversation history
+      const recentHistory = options.conversationHistory.slice(-8)
+      for (const turn of recentHistory) {
+        if (!turn.content || !turn.content.trim()) continue
+        rawTurns.push({
+          role: turn.role === 'assistant' ? 'model' : 'user',
+          text: turn.content.trim(),
+        })
+      }
+    }
+
+    // Append the latest user turn
+    rawTurns.push({
+      role: 'user',
+      text: currentTurnText,
+    })
+
+    // Sanitize to ensure alternating roles starting with 'user'
+    const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = []
+    for (const turn of rawTurns) {
+      if (contents.length === 0) {
+        if (turn.role === 'user') {
+          contents.push({ role: 'user', parts: [{ text: turn.text }] })
+        }
+      } else {
+        const last = contents[contents.length - 1]
+        if (last.role === turn.role) {
+          last.parts[0].text += '\n\n' + turn.text
+        } else {
+          contents.push({ role: turn.role, parts: [{ text: turn.text }] })
+        }
+      }
+    }
+
+    if (contents.length === 0) {
+      contents.push({ role: 'user', parts: [{ text: currentTurnText }] })
+    }
+
+    // Models to try in order of preference (resilient fallback on rate-limits / demand spikes)
+    const modelsToTry = [
+      GEMINI_MODEL,
+      'gemini-3.5-flash',
+      'gemini-3.1-flash-lite',
+    ].filter((v, i, a) => a.indexOf(v) === i)
+
+    for (const model of modelsToTry) {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
+
+      try {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 8000)
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            systemInstruction: {
+              parts: [{ text: systemInstructionText }],
+            },
+            contents,
+            generationConfig: {
+              temperature: 0.2,
+              maxOutputTokens: 1000,
+            },
+          }),
+        })
+
+        clearTimeout(timer)
+
+        if (!response.ok) {
+          console.warn(`[GeminiService.generateCopilotResponse] HTTP ${response.status} from ${model}, trying next model`)
+          continue
+        }
+
+        const resData = await response.json()
+        const answerText = resData?.candidates?.[0]?.content?.parts?.[0]?.text
+        if (answerText && typeof answerText === 'string' && answerText.trim()) {
+          return answerText.trim()
+        }
+      } catch (err) {
+        console.warn(`[GeminiService.generateCopilotResponse] Call failed for ${model}:`, (err as Error).message)
+        continue
+      }
+    }
+
+    return null
   }
 }

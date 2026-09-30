@@ -344,15 +344,27 @@ export default function Page() {
 
   // Copilot Chat State (Feature 11)
   const [copilotMessages, setCopilotMessages] = useState<
-    Array<{ sender: 'user' | 'assistant'; text: string; standards?: any[] }>
+    Array<{
+      sender: 'user' | 'assistant'
+      text: string
+      standards?: any[]
+      suggestedQuestions?: string[]
+    }>
   >([
     {
       sender: 'assistant',
-      text: 'Namaste! I am the IS-Guide AI Procurement Intelligence Assistant. Ask any question about Indian Standards, mandatory test procedures, or statutory QCO certification.',
+      text: 'Hello! I am IS-Guide AI, a helpful conversational AI assistant with specialized expertise in Indian procurement standards. How can I help you today?',
     },
   ])
   const [copilotInput, setCopilotInput] = useState('')
   const [copilotLoading, setCopilotLoading] = useState(false)
+  const copilotEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (assistant) {
+      copilotEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [copilotMessages, copilotLoading, assistant])
 
   // Live Analysis State with Completeness & Requirements
   const [currentAnalysis, setCurrentAnalysis] = useState<any>({
@@ -752,9 +764,16 @@ export default function Page() {
     if (!text.trim() || copilotLoading) return
 
     const userMsg = { sender: 'user' as const, text: text.trim() }
-    setCopilotMessages((prev) => [...prev, userMsg])
+    const updatedMessages = [...copilotMessages, userMsg]
+    setCopilotMessages(updatedMessages)
     setCopilotInput('')
     setCopilotLoading(true)
+
+    // Build multi-turn conversational history
+    const conversationHistory = updatedMessages.map((m) => ({
+      role: m.sender,
+      content: m.text,
+    }))
 
     try {
       const res = await fetch('/api/assistant/chat', {
@@ -762,16 +781,29 @@ export default function Page() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question: text.trim(),
+          conversationHistory,
           language: selectedLanguage,
           context: {
-            specText: specText.slice(0, 500),
+            specText: specText.slice(0, 800),
+            currentAnalysis: currentAnalysis
+              ? {
+                  title: currentAnalysis.title,
+                  requirements: currentAnalysis.requirements,
+                  recommendations: currentAnalysis.recommendations,
+                  completeness: currentAnalysis.completeness,
+                }
+              : undefined,
           },
         }),
       })
 
       const json = await res.json()
-      const answer = json?.data?.answer || json?.answer || 'Recommendations are evaluated against verified BIS records.'
+      const answer =
+        json?.data?.answer ||
+        json?.answer ||
+        'Recommendations are evaluated against verified BIS records.'
       const standards = json?.data?.standards || []
+      const dynamicSuggestions = json?.data?.suggestedQuestions
 
       setCopilotMessages((prev) => [
         ...prev,
@@ -779,6 +811,7 @@ export default function Page() {
           sender: 'assistant',
           text: answer,
           standards,
+          suggestedQuestions: dynamicSuggestions,
         },
       ])
       setCopilotLoading(false)
@@ -787,11 +820,29 @@ export default function Page() {
         ...prev,
         {
           sender: 'assistant',
-          text: 'Semantic enrichment is temporarily unavailable. Database-based matching has been used.\n\n*Recommendations are intended to assist procurement review and should be verified against the latest applicable official standards and regulatory requirements.*',
+          text:
+            selectedLanguage === 'hi'
+              ? 'एआई वार्तालाप अस्थायी रूप से अनुपलब्ध है। आपकी मानक विश्लेषण सुविधाएँ अभी भी उपलब्ध हैं।'
+              : selectedLanguage === 'te'
+              ? 'AI సంభాషణ తాత్కాలికంగా అందుబాటులో లేదు. మీ ప్రమాణాల విశ్లేషణ ఫీచర్లు ఇప్పటికీ అందుబాటులో ఉన్నాయి.'
+              : 'AI conversation is temporarily unavailable. Your standards analysis features are still available.',
         },
       ])
       setCopilotLoading(false)
     }
+  }
+
+  function handleClearChat() {
+    setCopilotMessages([
+      {
+        sender: 'assistant',
+        text: t(
+          'copilotGreeting',
+          'Hello! I am IS-Guide AI, a helpful conversational AI assistant with specialized expertise in Indian procurement standards. How can I help you today?'
+        ),
+      },
+    ])
+    setCopilotInput('')
   }
 
   const filteredStandards = useMemo(() => {
@@ -1142,11 +1193,23 @@ export default function Page() {
               <div className="assistant-title">
                 <span className="online-dot" /> {t('aiCopilot', 'IS-Guide AI Copilot')}
               </div>
-              <div className="assistant-sub">Verified Indian Standards Intelligence</div>
+              <div className="assistant-sub">General & Procurement Intelligence</div>
             </div>
-            <button className="icon-button" onClick={() => setAssistant(false)}>
-              <X size={16} />
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button
+                className="icon-button"
+                onClick={handleClearChat}
+                title={t('clearChat', 'Clear Chat')}
+                aria-label={t('clearChat', 'Clear Chat')}
+                style={{ fontSize: 11, padding: '4px 8px', borderRadius: 4, height: 'auto', width: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}
+              >
+                <Trash2 size={13} />
+                <span style={{ fontSize: 11 }}>{t('clearChat', 'Clear')}</span>
+              </button>
+              <button className="icon-button" onClick={() => setAssistant(false)}>
+                <X size={16} />
+              </button>
+            </div>
           </div>
 
           <div className="assistant-body" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1193,7 +1256,7 @@ export default function Page() {
 
             {copilotLoading && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)', padding: 6 }}>
-                <Loader2 size={14} className="animate-spin" /> {t('copilotThinking', 'Grounding question in verified BIS catalog...')}
+                <Loader2 size={14} className="animate-spin" /> {t('copilotThinking', 'Thinking...')}
               </div>
             )}
 
@@ -1201,12 +1264,15 @@ export default function Page() {
               <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
                 SUGGESTED QUESTIONS
               </div>
-              {[
-                'Which standards apply to 120W outdoor LED street lights?',
-                'Which test standards should be included?',
-                'What certification requirements should I check?',
-                'Are there related safety standards?',
-              ].map((q) => (
+              {(
+                copilotMessages[copilotMessages.length - 1]?.suggestedQuestions || [
+                  'Which Indian Standard applies to ready mixed concrete?',
+                  'What standards apply to HDPE pipes?',
+                  'What is 25% of 800?',
+                  'What is BIS?',
+                  'What is React?',
+                ]
+              ).map((q: string) => (
                 <button
                   key={q}
                   className="suggestion"
@@ -1218,6 +1284,7 @@ export default function Page() {
                 </button>
               ))}
             </div>
+            <div ref={copilotEndRef} />
           </div>
 
           <div
@@ -1230,13 +1297,16 @@ export default function Page() {
               background: 'rgba(255, 255, 255, 0.6)',
             }}
           >
-            <input
-              type="text"
-              placeholder={t('copilotInputPlaceholder', 'Ask any question on Indian Standards...')}
+            <textarea
+              rows={1}
+              placeholder={t('copilotInputPlaceholder', 'Ask anything (math, general questions, or Indian Standards)...')}
               value={copilotInput}
               onChange={(e) => setCopilotInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSendCopilotMessage()
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  handleSendCopilotMessage()
+                }
               }}
               style={{
                 flex: 1,
@@ -1246,6 +1316,10 @@ export default function Page() {
                 background: '#FFFFFF',
                 fontSize: 12,
                 outline: 'none',
+                resize: 'none',
+                maxHeight: '90px',
+                fontFamily: 'inherit',
+                lineHeight: '1.4',
               }}
             />
             <button

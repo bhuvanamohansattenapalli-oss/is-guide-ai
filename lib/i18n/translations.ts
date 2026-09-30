@@ -102,6 +102,7 @@ export interface TranslationDictionary {
   copilotInputPlaceholder: string
   copilotSend: string
   copilotThinking: string
+  clearChat: string
 }
 
 export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
@@ -203,10 +204,11 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     analysisFailedError: 'Analysis server returned an error. Please retry.',
 
     // Copilot Assistant
-    copilotGreeting: 'Namaste! I am the IS-Guide AI Procurement Intelligence Assistant. Ask any question about Indian Standards, mandatory test procedures, or statutory QCO certification.',
-    copilotInputPlaceholder: 'Ask about Indian Standards, QCOs, test methods, or tender clauses...',
+    copilotGreeting: 'Hello! I am IS-Guide AI, a helpful conversational AI assistant with specialized expertise in Indian procurement standards. How can I help you today?',
+    copilotInputPlaceholder: 'Ask anything (math, general knowledge, or Indian Standards)...',
     copilotSend: 'Send Query',
     copilotThinking: 'Evaluating against verified BIS standards catalog...',
+    clearChat: 'Clear Chat',
   },
 
   hi: {
@@ -307,10 +309,11 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     analysisFailedError: 'विश्लेषण सर्वर ने त्रुटि लौटाई। कृपया पुनः प्रयास करें।',
 
     // Copilot Assistant
-    copilotGreeting: 'नमस्ते! मैं IS-Guide AI खरीद खुफिया सहायक हूँ। भारतीय मानकों, परीक्षण प्रक्रियाओं या वैधानिक QCO प्रमाणन के बारे में कोई भी प्रश्न पूछें।',
-    copilotInputPlaceholder: 'भारतीय मानकों, QCO, परीक्षण विधियों या निविदा शर्तों के बारे में पूछें...',
+    copilotGreeting: 'नमस्ते! मैं IS-Guide AI हूँ, भारतीय खरीद मानकों में विशेष ज्ञान रखने वाला आपका संवादी एआई सहायक। आज मैं आपकी क्या मदद कर सकता हूँ?',
+    copilotInputPlaceholder: 'कुछ भी पूछें (गणित, सामान्य ज्ञान, या भारतीय मानक)...',
     copilotSend: 'भेजें',
     copilotThinking: 'सत्यापित बीआईएस मानक कैटलॉग के आधार पर मूल्यांकन कर रहा है...',
+    clearChat: 'चैट साफ़ करें',
   },
 
   te: {
@@ -411,9 +414,10 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     analysisFailedError: 'విశ్లేషణ సర్వర్ లోపం చూపింది. దయచేసి మళ్ళీ ప్రయత్నించండి.',
 
     // Copilot Assistant
-    copilotGreeting: 'నమస్కారం! నేను IS-Guide AI ప్రొక్యూర్మెంట్ ఇంటెలిజెన్స్ అసిస్టెంట్‌ని. భారతీయ ప్రమాణాలు, పరీక్షా విధానాలు లేదా QCO సర్టిఫికేషన్ గురించి ఏదైనా అడగండి.',
-    copilotInputPlaceholder: 'భారతీయ ప్రమాణాలు, QCOలు, పరీక్షా పద్ధతులు లేదా టెండర్ నిబంధనల గురించి అడగండి...',
+    copilotGreeting: 'నమస్కారం! నేను IS-Guide AI, భారతీయ కొనుగోలు ప్రమాణాలలో ప్రత్యేక నైపుణ్యం కలిగిన మీ సంభాషణ AI అసిస్టెంట్‌ని. ఈ రోజు నేను మీకు ఎలా సహాయపడగలను?',
+    copilotInputPlaceholder: 'ఏదైనా అడగండి (గణితం, సాధారణ పరిజ్ఞానం, లేదా భారతీయ ప్రమాణాలు)...',
     copilotSend: 'పంపండి',
     copilotThinking: 'ధృవీకరించబడిన BIS ప్రమాణాల కేటలాగ్ ద్వారా మూల్యాంకనం చేస్తోంది...',
+    clearChat: 'చాట్ క్లియర్ చేయండి',
   },
 }

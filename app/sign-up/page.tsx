@@ -15,6 +15,7 @@ import {
   Loader2,
   ShieldCheck,
   ChevronLeft,
+  Sparkles,
 } from 'lucide-react'
 
 function EmblemOfIndia({ size = 24 }: { size?: number }) {
@@ -34,15 +35,28 @@ function EmblemOfIndia({ size = 24 }: { size?: number }) {
 
 export default function SignUpPage() {
   const router = useRouter()
-  const { signUp } = useAuth()
+  const { signUp, demoLogin } = useAuth()
 
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [demoLoggingIn, setDemoLoggingIn] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [confirmNotice, setConfirmNotice] = useState<string | null>(null)
+
+  const handleQuickDemoLogin = async () => {
+    setDemoLoggingIn(true)
+    setErrorMsg(null)
+    try {
+      await demoLogin()
+      router.push('/dashboard')
+    } catch {
+      setErrorMsg('Demo authentication could not be completed. Please try again.')
+      setDemoLoggingIn(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -245,6 +259,54 @@ export default function SignUpPage() {
                 <span>{errorMsg}</span>
               </div>
             )}
+
+            {/* 1-Click Fast Demo Login Option for Judges & Evaluators */}
+            <div style={{ marginBottom: 20 }}>
+              <button
+                type="button"
+                onClick={handleQuickDemoLogin}
+                disabled={demoLoggingIn}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 9,
+                  padding: '12px 18px',
+                  borderRadius: 10,
+                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.22) 0%, rgba(217, 119, 6, 0.32) 100%)',
+                  color: '#FEF3C7',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  border: '1px solid rgba(245, 158, 11, 0.6)',
+                  cursor: demoLoggingIn ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 0 16px rgba(245, 158, 11, 0.25)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {demoLoggingIn ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Sparkles size={16} style={{ color: '#F59E0B' }} />
+                )}
+                <span>⚡ Instant Demo Login (Procurement Officer)</span>
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '18px 0 6px' }}>
+                <div style={{ flex: 1, height: 1, background: 'rgba(255, 255, 255, 0.14)' }} />
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: '#94A3B8',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Or register with credentials
+                </span>
+                <div style={{ flex: 1, height: 1, background: 'rgba(255, 255, 255, 0.14)' }} />
+              </div>
+            </div>
 
             {/* Registration Form */}
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

@@ -18,6 +18,7 @@ export const createAnalysisSchema = z.object({
   fileName: z.string().trim().optional(),
   fileType: z.string().trim().optional(),
   fileSize: z.number().int().optional(),
+  extractedText: z.string().trim().optional(),
 })
 
 export type CreateAnalysisInput = z.infer<typeof createAnalysisSchema>

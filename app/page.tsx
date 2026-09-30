@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   Building2,
   Globe2,
+  Loader2,
 } from 'lucide-react'
 
 function EmblemOfIndia({ size = 28 }: { size?: number }) {
@@ -35,8 +36,19 @@ function EmblemOfIndia({ size = 28 }: { size?: number }) {
 }
 
 export default function LandingPage() {
-  const { user, loading } = useAuth()
+  const { user, loading, demoLogin } = useAuth()
   const router = useRouter()
+  const [demoLoggingIn, setDemoLoggingIn] = useState(false)
+
+  const handleDemoLogin = async () => {
+    setDemoLoggingIn(true)
+    try {
+      await demoLogin()
+      router.push('/dashboard')
+    } catch {
+      setDemoLoggingIn(false)
+    }
+  }
 
   return (
     <div style={{ minHeight: '100vh', position: 'relative', overflowX: 'hidden', background: '#0B132B' }}>
@@ -76,12 +88,65 @@ export default function LandingPage() {
 
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            TOP DEMO ANNOUNCEMENT BANNER
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+        <div
+          style={{
+            background: 'linear-gradient(90deg, #1E3A8A 0%, #D97706 50%, #047857 100%)',
+            padding: '7px 20px',
+            textAlign: 'center',
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#FFFFFF',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12,
+            flexWrap: 'wrap',
+            zIndex: 20,
+            position: 'relative',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
+          }}
+        >
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span>🇮🇳</span>
+            <span><strong>SIH 2026 Innovation Showcase</strong> · Experience IS-Guide AI with Officer clearance</span>
+          </span>
+          <button
+            onClick={handleDemoLogin}
+            disabled={demoLoggingIn}
+            style={{
+              background: '#FFFFFF',
+              color: '#0F172A',
+              border: 'none',
+              borderRadius: 20,
+              padding: '3px 12px',
+              fontSize: 11,
+              fontWeight: 800,
+              cursor: demoLoggingIn ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+              transition: 'transform 0.15s ease',
+            }}
+          >
+            {demoLoggingIn ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Sparkles size={12} style={{ color: '#D97706' }} />
+            )}
+            <span>⚡ Demo Login (1-Click)</span>
+          </button>
+        </div>
+
+        {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             TOP HEADER / BRAND BAR
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
         <header
           style={{
             width: '100%',
-            padding: '16px 28px',
+            padding: '14px 28px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -146,7 +211,54 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            {/* Quick Demo Login Button at Top */}
+            <button
+              onClick={handleDemoLogin}
+              disabled={demoLoggingIn}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 7,
+                padding: '8px 16px',
+                borderRadius: 8,
+                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.35) 100%)',
+                color: '#FEF3C7',
+                fontSize: 13,
+                fontWeight: 700,
+                border: '1px solid rgba(245, 158, 11, 0.6)',
+                backdropFilter: 'blur(8px)',
+                cursor: demoLoggingIn ? 'not-allowed' : 'pointer',
+                boxShadow: '0 0 16px rgba(245, 158, 11, 0.25)',
+                transition: 'all 0.15s ease',
+              }}
+              title="Instant 1-Click Login with Demo Procurement Officer Account"
+            >
+              {demoLoggingIn ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" /> Authenticating...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={14} style={{ color: '#F59E0B' }} />
+                  <span>Demo Login</span>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      padding: '1px 6px',
+                      borderRadius: 999,
+                      background: 'rgba(245, 158, 11, 0.35)',
+                      color: '#FBBF24',
+                      border: '1px solid rgba(245, 158, 11, 0.5)',
+                      fontWeight: 800,
+                    }}
+                  >
+                    1-CLICK
+                  </span>
+                </>
+              )}
+            </button>
+
             {user ? (
               <Link
                 href="/dashboard"
@@ -324,6 +436,33 @@ export default function LandingPage() {
               marginBottom: 56,
             }}
           >
+            <button
+              onClick={handleDemoLogin}
+              disabled={demoLoggingIn}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '14px 32px',
+                borderRadius: 10,
+                background: 'linear-gradient(135deg, #D97706 0%, #B45309 100%)',
+                color: '#FFFFFF',
+                fontSize: 15,
+                fontWeight: 700,
+                border: '1px solid rgba(251, 191, 36, 0.55)',
+                boxShadow: '0 8px 24px rgba(217, 119, 6, 0.4)',
+                cursor: demoLoggingIn ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {demoLoggingIn ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Sparkles size={18} />
+              )}
+              <span>⚡ Fast Demo Login</span>
+            </button>
+
             <Link
               href="/sign-in"
               style={{

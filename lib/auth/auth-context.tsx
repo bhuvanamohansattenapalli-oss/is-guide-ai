@@ -16,6 +16,7 @@ interface AuthContextType {
   ) => Promise<{ success: boolean; error?: string; message?: string }>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>
+  demoLogin: (name?: string, role?: string) => Promise<{ success: boolean }>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -345,6 +346,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const demoLogin = async (
+    name = 'Dr. A. K. Sharma',
+    role = 'Senior Procurement Officer'
+  ) => {
+    const demoUser = {
+      id: 'usr_demo_officer_2026',
+      email: 'officer@isguide.gov.in',
+      user_metadata: {
+        full_name: name,
+        role: role,
+        department: 'Public Works & Procurement Directorate',
+      },
+      app_metadata: { provider: 'email' },
+      aud: 'authenticated',
+      created_at: new Date().toISOString(),
+    } as unknown as User
+
+    const demoSession = {
+      access_token: 'demo-token-officer-' + Date.now(),
+      token_type: 'bearer',
+      user: demoUser,
+      expires_in: 86400,
+      expires_at: Math.floor(Date.now() / 1000) + 86400,
+    } as unknown as Session
+
+    setUser(demoUser)
+    setSession(demoSession)
+    syncCookie(true)
+    try {
+      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(demoUser))
+      localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(demoSession))
+    } catch {}
+    return { success: true }
+  }
+
   const value = useMemo(
     () => ({
       user,
@@ -354,6 +390,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUp,
       signOut,
       resetPassword,
+      demoLogin,
     }),
     [user, session, loading]
   )

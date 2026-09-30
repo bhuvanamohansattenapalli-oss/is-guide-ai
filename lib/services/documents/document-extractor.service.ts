@@ -1,4 +1,5 @@
 import mammoth from 'mammoth'
+import { AppError } from '@/lib/utils/api-response'
 
 export interface ExtractedDocumentResult {
   text: string
@@ -29,11 +30,11 @@ export class DocumentExtractorService {
     // Maximum file size check (10 MB)
     const MAX_SIZE = 10 * 1024 * 1024
     if (fileSize > MAX_SIZE) {
-      throw new Error(`File exceeds maximum allowed size of 10MB (${(fileSize / (1024 * 1024)).toFixed(1)}MB provided).`)
+      throw new AppError('File is too large. Maximum supported size is 10 MB.', 'BAD_REQUEST', 400)
     }
 
     if (fileSize === 0) {
-      throw new Error('The uploaded file is empty (0 bytes).')
+      throw new AppError('Document contains no extractable text.', 'BAD_REQUEST', 400)
     }
 
     let extractedText = ''
@@ -44,25 +45,51 @@ export class DocumentExtractorService {
       detectedType = 'application/pdf'
       try {
         const pdfParseModule: any = await import('pdf-parse')
-        const pdfParse = (pdfParseModule.default || pdfParseModule) as (dataBuffer: Buffer) => Promise<{ text: string; numpages: number }>
-        const pdfData = await pdfParse(buffer)
-        extractedText = pdfData.text || ''
-        pageCount = pdfData.numpages
-      } catch (err: any) {
-        console.warn('[DocumentExtractorService] pdf-parse direct extraction note:', err.message)
-        // Fallback: extract printable text streams from PDF buffer if standard parser errors
-        const ascii = buffer.toString('latin1')
-        const streamMatches = ascii.match(/\(([^()]{3,})\)[\s]*Tj/g) || []
-        const fallbackText = streamMatches
-          .map((m) => m.replace(/^\(|\)[\s]*Tj$/g, ''))
-          .filter((t) => t.length > 2)
-          .join(' ')
-        if (fallbackText.length > 100) {
-          extractedText = fallbackText
-          warnings.push('Extracted using PDF text-stream fallback.')
+
+        if (pdfParseModule.PDFParse || pdfParseModule.default?.PDFParse) {
+          const PDFClass = pdfParseModule.PDFParse || pdfParseModule.default.PDFParse
+
+          // Explicitly set worker for Next.js / Node.js runtime
+          try {
+            const { pathToFileURL } = await import('node:url')
+            const path = await import('node:path')
+            const fs = await import('node:fs')
+
+            const workerCandidates = [
+              path.resolve(process.cwd(), 'node_modules/pdf-parse/dist/worker/pdf.worker.mjs'),
+              path.resolve(process.cwd(), 'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'),
+            ]
+            for (const workerPath of workerCandidates) {
+              if (fs.existsSync(workerPath)) {
+                PDFClass.setWorker(pathToFileURL(workerPath).href)
+                break
+              }
+            }
+          } catch (workerErr) {
+            console.warn('[DocumentExtractorService] Worker path note:', workerErr)
+          }
+
+          const parser = new PDFClass({ data: buffer })
+          if (typeof parser.load === 'function') {
+            await parser.load()
+          }
+          const res = await parser.getText()
+          extractedText = typeof res === 'string' ? res : (res?.text || '')
+          pageCount = res?.total || res?.pages?.length
+          if (typeof parser.destroy === 'function') {
+            await parser.destroy()
+          }
+        } else if (typeof pdfParseModule === 'function' || typeof pdfParseModule.default === 'function') {
+          const fn = typeof pdfParseModule === 'function' ? pdfParseModule : pdfParseModule.default
+          const pdfData = await fn(buffer)
+          extractedText = pdfData?.text || ''
+          pageCount = pdfData?.numpages
         } else {
-          throw new Error('Unable to extract readable text from PDF. The document may be password-protected or contain scanned images without OCR text.')
+          throw new Error('PDF parsing module could not be initialized.')
         }
+      } catch (err: any) {
+        console.error('[DocumentExtractorService] PDF extraction error:', err?.message || err)
+        throw new AppError('Unable to extract text from this PDF. Please verify that the file is readable.', 'BAD_REQUEST', 400)
       }
     } else if (
       ext === 'docx' ||
@@ -71,19 +98,25 @@ export class DocumentExtractorService {
     ) {
       detectedType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       try {
-        const result = await mammoth.extractRawText({ buffer })
+        const mammothModule: any = await import('mammoth')
+        const extractFn = mammothModule.extractRawText || mammothModule.default?.extractRawText || mammoth.extractRawText
+        if (!extractFn) {
+          throw new Error('Mammoth extractRawText function not available.')
+        }
+        const result = await extractFn({ buffer })
         extractedText = result.value || ''
         if (result.messages && result.messages.length > 0) {
-          warnings.push(...result.messages.map((m) => m.message))
+          warnings.push(...result.messages.map((m: any) => m.message))
         }
       } catch (err: any) {
-        throw new Error(`Failed to extract text from DOCX file: ${err.message}`)
+        console.error('[DocumentExtractorService] DOCX extraction error:', err?.message || err)
+        throw new AppError('Unable to process this DOCX document.', 'BAD_REQUEST', 400)
       }
     } else if (ext === 'txt' || mimeType?.startsWith('text/')) {
       detectedType = 'text/plain'
       extractedText = buffer.toString('utf-8')
     } else {
-      throw new Error(`Unsupported document format '.${ext}'. Please upload a PDF (.pdf), Microsoft Word (.docx), or Text (.txt) file.`)
+      throw new AppError('Unsupported file type.', 'BAD_REQUEST', 400)
     }
 
     // Clean whitespace and normalize line breaks
@@ -95,8 +128,8 @@ export class DocumentExtractorService {
       .replace(/\n{3,}/g, '\n\n')
       .trim()
 
-    if (!cleanText || cleanText.length < 15) {
-      throw new Error('The document does not contain sufficient text for procurement specification analysis.')
+    if (!cleanText || cleanText.length === 0) {
+      throw new AppError('Document contains no extractable text.', 'BAD_REQUEST', 400)
     }
 
     return {

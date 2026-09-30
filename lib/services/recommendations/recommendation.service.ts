@@ -149,7 +149,7 @@ async function getStandardsCatalog(): Promise<VerifiedStandardRecord[]> {
         },
       }),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Prisma catalog query timeout')), 2500)
+        setTimeout(() => reject(new Error('Prisma catalog query timeout')), 6000)
       ),
     ])
 
@@ -197,16 +197,22 @@ export class RecommendationService {
       throw new Error(`Analysis with ID ${analysisId} not found`)
     }
 
+    const isDbPersisted = !analysisId.startsWith('analysis_')
+
     // Set status to PROCESSING
-    try {
-      await prisma.procurementAnalysis.update({
-        where: { id: analysisId },
-        data: { status: AnalysisStatus.PROCESSING },
-      })
-    } catch {
-      if (devAnalysisStore.has(analysisId)) {
-        devAnalysisStore.get(analysisId).status = AnalysisStatus.PROCESSING
+    if (isDbPersisted) {
+      try {
+        await prisma.procurementAnalysis.update({
+          where: { id: analysisId },
+          data: { status: AnalysisStatus.PROCESSING },
+        })
+      } catch {
+        if (devAnalysisStore.has(analysisId)) {
+          devAnalysisStore.get(analysisId).status = AnalysisStatus.PROCESSING
+        }
       }
+    } else if (devAnalysisStore.has(analysisId)) {
+      devAnalysisStore.get(analysisId).status = AnalysisStatus.PROCESSING
     }
 
     try {
@@ -222,35 +228,43 @@ export class RecommendationService {
       const extractedData = await this.extractRequirements(rawText, detectedLanguage)
 
       // Clear any prior extracted requirements for this analysis (idempotent)
-      try {
-        await prisma.extractedRequirement.deleteMany({
-          where: { analysisId },
-        })
-      } catch {
-        // Ignored in offline fallback
+      if (isDbPersisted) {
+        try {
+          await prisma.extractedRequirement.deleteMany({
+            where: { analysisId },
+          })
+        } catch {
+          // Ignored in offline fallback
+        }
       }
 
       // Persist Extracted Requirements
       let createdRequirements: any[] = []
-      try {
-        createdRequirements = await Promise.all(
-          extractedData.map((req) =>
-            prisma.extractedRequirement.create({
-              data: {
-                analysisId,
-                category: req.category,
-                name: req.name,
-                value: req.value,
-                unit: req.unit || null,
-                description: req.isMandatory
-                  ? 'Mandatory specification clause'
-                  : 'Recommended specification clause',
-                confidence: req.confidence,
-              },
-            })
+      if (isDbPersisted) {
+        try {
+          createdRequirements = await Promise.all(
+            extractedData.map((req) =>
+              prisma.extractedRequirement.create({
+                data: {
+                  analysisId,
+                  category: req.category,
+                  name: req.name,
+                  value: req.value,
+                  unit: req.unit || null,
+                  description: req.isMandatory
+                    ? 'Mandatory specification clause'
+                    : 'Recommended specification clause',
+                  confidence: req.confidence,
+                },
+              })
+            )
           )
-        )
-      } catch {
+        } catch {
+          // Ignored in offline fallback
+        }
+      }
+
+      if (!createdRequirements || createdRequirements.length === 0) {
         createdRequirements = extractedData.map((req, idx) => ({
           id: `req_${analysisId}_${idx}`,
           analysisId,
@@ -304,20 +318,35 @@ export class RecommendationService {
         const rank = i + 1
 
         let recId = `rec_${analysisId}_${rank}`
-        try {
-          const rec = await prisma.recommendation.create({
-            data: {
-              analysisId,
-              standardId: item.standard.id,
-              rank,
-              relevanceScore: item.score,
-              confidenceScore: item.score,
-              reason: item.reason,
-            },
-          })
-          recId = rec.id
-        } catch {
-          // Fallback
+        let createdDbRec = false
+        if (isDbPersisted) {
+          try {
+            let actualStandardId = item.standard.id
+            if (actualStandardId.startsWith('std-')) {
+              const matched = await prisma.standard.findFirst({
+                where: { standardNumber: item.standard.standardNumber },
+                select: { id: true },
+              })
+              if (matched) {
+                actualStandardId = matched.id
+              }
+            }
+
+            const rec = await prisma.recommendation.create({
+              data: {
+                analysisId,
+                standardId: actualStandardId,
+                rank,
+                relevanceScore: item.score,
+                confidenceScore: item.score,
+                reason: item.reason,
+              },
+            })
+            recId = rec.id
+            createdDbRec = true
+          } catch {
+            // Fallback
+          }
         }
 
         // Collect evidence
@@ -327,13 +356,15 @@ export class RecommendationService {
           const evType = ev.type || EvidenceType.SPECIFICATION_MATCH
           const evText = ev.notes || 'Technical specification alignment identified for this standard.'
           if (reqRecord) {
-            evidenceToBatch.push({
-              recommendationId: recId,
-              requirementId: reqRecord.id,
-              evidenceType: evType,
-              evidenceText: evText,
-              sourceReference: item.standard.standardNumber,
-            })
+            if (createdDbRec) {
+              evidenceToBatch.push({
+                recommendationId: recId,
+                requirementId: reqRecord.id,
+                evidenceType: evType,
+                evidenceText: evText,
+                sourceReference: item.standard.standardNumber,
+              })
+            }
             evidenceRecords.push({
               requirementName: reqRecord.name,
               requirementValue: reqRecord.value,
@@ -425,7 +456,7 @@ export class RecommendationService {
       }
 
       // Batch insert evidence rows if DB is connected
-      if (evidenceToBatch.length > 0) {
+      if (isDbPersisted && evidenceToBatch.length > 0) {
         try {
           await prisma.recommendationEvidence.createMany({
             data: evidenceToBatch,
@@ -464,15 +495,19 @@ export class RecommendationService {
       )
 
       // Mark analysis as COMPLETED
-      try {
-        await prisma.procurementAnalysis.update({
-          where: { id: analysisId },
-          data: { status: AnalysisStatus.COMPLETED },
-        })
-      } catch {
-        if (devAnalysisStore.has(analysisId)) {
-          devAnalysisStore.get(analysisId).status = AnalysisStatus.COMPLETED
+      if (isDbPersisted) {
+        try {
+          await prisma.procurementAnalysis.update({
+            where: { id: analysisId },
+            data: { status: AnalysisStatus.COMPLETED },
+          })
+        } catch {
+          if (devAnalysisStore.has(analysisId)) {
+            devAnalysisStore.get(analysisId).status = AnalysisStatus.COMPLETED
+          }
         }
+      } else if (devAnalysisStore.has(analysisId)) {
+        devAnalysisStore.get(analysisId).status = AnalysisStatus.COMPLETED
       }
 
       const result: RecommendationResult = {
@@ -509,15 +544,19 @@ export class RecommendationService {
       return result
     } catch (err) {
       console.error('[RecommendationService.processAnalysis] Error:', err)
-      try {
-        await prisma.procurementAnalysis.update({
-          where: { id: analysisId },
-          data: { status: AnalysisStatus.FAILED },
-        })
-      } catch {
-        if (devAnalysisStore.has(analysisId)) {
-          devAnalysisStore.get(analysisId).status = AnalysisStatus.FAILED
+      if (isDbPersisted) {
+        try {
+          await prisma.procurementAnalysis.update({
+            where: { id: analysisId },
+            data: { status: AnalysisStatus.FAILED },
+          })
+        } catch {
+          if (devAnalysisStore.has(analysisId)) {
+            devAnalysisStore.get(analysisId).status = AnalysisStatus.FAILED
+          }
         }
+      } else if (devAnalysisStore.has(analysisId)) {
+        devAnalysisStore.get(analysisId).status = AnalysisStatus.FAILED
       }
       throw err
     }
@@ -1196,22 +1235,25 @@ export class RecommendationService {
       })
     }
 
-    try {
-      await prisma.analysisCertification.deleteMany({
-        where: { analysisId },
-      })
-      if (results.length > 0) {
-        await prisma.analysisCertification.createMany({
-          data: results.map((r) => ({
-            analysisId,
-            certificationRequirementId: r.id,
-            status: r.status,
-            notes: r.notes,
-          })),
+    const isDbPersisted = !analysisId.startsWith('analysis_')
+    if (isDbPersisted) {
+      try {
+        await prisma.analysisCertification.deleteMany({
+          where: { analysisId },
         })
+        if (results.length > 0) {
+          await prisma.analysisCertification.createMany({
+            data: results.map((r) => ({
+              analysisId,
+              certificationRequirementId: r.id,
+              status: r.status,
+              reason: r.notes,
+            })),
+          })
+        }
+      } catch {
+        // Ignored in offline fallback
       }
-    } catch {
-      // Ignored in offline fallback
     }
 
     return results
@@ -1465,18 +1507,21 @@ export class RecommendationService {
     }
 
     let reportId = `report_${analysisId}`
-    try {
-      const reportContent = JSON.stringify({ summary, findings }, null, 2)
-      const report = await prisma.report.create({
-        data: {
-          analysisId,
-          title: reportTitle,
-          content: reportContent,
-        },
-      })
-      reportId = report.id
-    } catch {
-      // Ignored in offline fallback
+    const isDbPersisted = !analysisId.startsWith('analysis_')
+    if (isDbPersisted) {
+      try {
+        const reportContent = JSON.stringify({ summary, findings }, null, 2)
+        const report = await prisma.report.create({
+          data: {
+            analysisId,
+            title: reportTitle,
+            content: reportContent,
+          },
+        })
+        reportId = report.id
+      } catch {
+        // Ignored in offline fallback
+      }
     }
 
     return {

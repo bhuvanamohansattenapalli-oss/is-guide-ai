@@ -2,6 +2,7 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { AuthProvider } from '@/lib/auth/auth-context'
+import { LanguageProvider } from '@/lib/i18n/language-context'
 
 export const metadata: Metadata = {
   title: 'IS-Guide AI | Indian Standards Intelligence Platform',
@@ -44,7 +45,9 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased">
         <AuthProvider>
-          {children}
+          <LanguageProvider>
+            {children}
+          </LanguageProvider>
         </AuthProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

@@ -70,6 +70,37 @@ export function errorResponse(
   return NextResponse.json(responseBody, { status })
 }
 
+export class AppError extends Error {
+  public code: ErrorCode
+  public status: number
+  public details?: unknown
+
+  constructor(
+    message: string,
+    code: ErrorCode = 'BAD_REQUEST',
+    status = 400,
+    details?: unknown
+  ) {
+    super(message)
+    this.name = 'AppError'
+    this.code = code
+    this.status = status
+    this.details = details
+  }
+}
+
+const KNOWN_SAFE_ERROR_PREFIXES = [
+  'File is too large',
+  'File exceeds',
+  'Unable to extract text from this PDF',
+  'Unable to process this DOCX document',
+  'Unsupported file type',
+  'Document contains no extractable text',
+  'No file was provided',
+  'The uploaded file is empty',
+  'Please enter a specification',
+]
+
 /**
  * Helper to handle errors gracefully without leaking internal information or stack traces
  */
@@ -86,6 +117,19 @@ export function handleApiError(error: unknown) {
       400,
       formattedErrors
     )
+  }
+
+  if (error instanceof AppError) {
+    return errorResponse(error.code, error.message, error.status, error.details)
+  }
+
+  if (error instanceof Error) {
+    const isKnownSafe = KNOWN_SAFE_ERROR_PREFIXES.some((prefix) =>
+      error.message.startsWith(prefix)
+    )
+    if (isKnownSafe) {
+      return errorResponse('BAD_REQUEST', error.message, 400)
+    }
   }
 
   // Safe logging in server console for diagnostics

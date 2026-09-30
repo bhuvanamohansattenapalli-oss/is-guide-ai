@@ -4,6 +4,8 @@ import React, { createElement, useEffect, useMemo, useRef, useState } from 'reac
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth/auth-context'
+import { useLanguage } from '@/lib/i18n/language-context'
+import { TranslationDictionary } from '@/lib/i18n/translations'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -57,14 +59,14 @@ import {
 
 export type View = 'dashboard' | 'finder' | 'analyzer' | 'recommendations' | 'comparison' | 'compliance' | 'reports'
 
-const navItems: { id: View; label: string; icon: any }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: Home },
-  { id: 'finder', label: 'Standards Finder', icon: Search },
-  { id: 'analyzer', label: 'Tender Analyzer', icon: FileCheck2 },
-  { id: 'recommendations', label: 'AI Recommendations', icon: Sparkles },
-  { id: 'comparison', label: 'Standards Comparison', icon: Scale },
-  { id: 'compliance', label: 'Compliance & QCO', icon: ShieldCheck },
-  { id: 'reports', label: 'Procurement Reports', icon: BarChart3 },
+const navItems: { id: View; key: keyof TranslationDictionary; label: string; icon: any }[] = [
+  { id: 'dashboard', key: 'dashboard', label: 'Dashboard', icon: Home },
+  { id: 'finder', key: 'standardsFinder', label: 'Standards Finder', icon: Search },
+  { id: 'analyzer', key: 'analyzer', label: 'Tender Analyzer', icon: FileCheck2 },
+  { id: 'recommendations', key: 'aiRecommendations', label: 'AI Recommendations', icon: Sparkles },
+  { id: 'comparison', key: 'comparison', label: 'Standards Comparison', icon: Scale },
+  { id: 'compliance', key: 'complianceQCO', label: 'Compliance & QCO', icon: ShieldCheck },
+  { id: 'reports', key: 'procurementReports', label: 'Procurement Reports', icon: BarChart3 },
 ]
 
 export interface VerifiedStandard {
@@ -323,7 +325,7 @@ export default function Page() {
   const [specTitle, setSpecTitle] = useState('Smart City LED Street Lighting Tender')
   const [specText, setSpecText] = useState(PREFILLED_EXAMPLES[0].specText)
   const [selectedExampleId, setSelectedExampleId] = useState('led-lighting')
-  const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'hi' | 'te'>('en')
+  const { language: selectedLanguage, setLanguage: setSelectedLanguage, t } = useLanguage()
   const [analysisError, setAnalysisError] = useState<string | null>(null)
   const [selectedStandard, setSelectedStandard] = useState<VerifiedStandard | null>(null)
   const [standardsCatalog, setStandardsCatalog] = useState<VerifiedStandard[]>(defaultVerifiedStandards)
@@ -823,10 +825,10 @@ export default function Page() {
         </div>
 
         <nav className="nav-list">
-          {navItems.map(({ id, label, icon: Icon }) => (
+          {navItems.map(({ id, key, label, icon: Icon }) => (
             <button key={id} onClick={() => go(id)} className={`nav-item ${view === id ? 'active' : ''}`}>
               <Icon size={18} />
-              <span>{label}</span>
+              <span>{t(key, label)}</span>
             </button>
           ))}
         </nav>
@@ -842,11 +844,11 @@ export default function Page() {
           </button>
           <button className="nav-item" onClick={() => setAssistant(!assistant)}>
             <Headphones size={18} />
-            <span>AI Copilot</span>
+            <span>{t('aiCopilot', 'AI Copilot')}</span>
           </button>
           <button className="nav-item" onClick={() => go('compliance')}>
             <ShieldCheck size={18} />
-            <span>QCO Registry</span>
+            <span>{t('qcoRegistry', 'QCO Registry')}</span>
           </button>
         </div>
       </aside>
@@ -863,7 +865,7 @@ export default function Page() {
               <Search size={16} />
               <input
                 type="text"
-                placeholder="Search Indian Standards (IS 456, IS 10322, IS 1786, IS 4984)..."
+                placeholder={t('searchPlaceholder', 'Search Indian Standards (IS 456, IS 10322, IS 1786, IS 4984)...')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
@@ -981,7 +983,7 @@ export default function Page() {
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
                     <UserIcon size={14} style={{ color: 'var(--primary-blue)' }} />
-                    <span>Profile Details</span>
+                    <span>{t('profile', 'Profile Details')}</span>
                   </button>
 
                   <button
@@ -1008,7 +1010,7 @@ export default function Page() {
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
                     <History size={14} style={{ color: 'var(--primary-blue)' }} />
-                    <span>Analysis History</span>
+                    <span>{t('analysisHistory', 'Analysis History')}</span>
                   </button>
 
                   <div style={{ height: 1, background: 'var(--line-subtle)', margin: '6px 0' }} />
@@ -1039,7 +1041,7 @@ export default function Page() {
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
                     <LogOut size={14} />
-                    <span>Sign Out</span>
+                    <span>{t('signOut', 'Sign Out')}</span>
                   </button>
                 </div>
               )}
@@ -1130,7 +1132,7 @@ export default function Page() {
       {/* AI COPILOT DRAWER (FEATURE 11) */}
       <button className="assistant-trigger no-print" onClick={() => setAssistant(!assistant)}>
         <MessageSquareText size={18} />
-        <span>Ask IS-Guide AI</span>
+        <span>{t('aiCopilot', 'Ask IS-Guide AI')}</span>
       </button>
 
       {assistant && (
@@ -1138,7 +1140,7 @@ export default function Page() {
           <div className="assistant-header">
             <div>
               <div className="assistant-title">
-                <span className="online-dot" /> IS-Guide AI Copilot
+                <span className="online-dot" /> {t('aiCopilot', 'IS-Guide AI Copilot')}
               </div>
               <div className="assistant-sub">Verified Indian Standards Intelligence</div>
             </div>
@@ -1191,7 +1193,7 @@ export default function Page() {
 
             {copilotLoading && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)', padding: 6 }}>
-                <Loader2 size={14} className="animate-spin" /> Grounding question in verified BIS catalog...
+                <Loader2 size={14} className="animate-spin" /> {t('copilotThinking', 'Grounding question in verified BIS catalog...')}
               </div>
             )}
 
@@ -1230,7 +1232,7 @@ export default function Page() {
           >
             <input
               type="text"
-              placeholder="Ask any question on Indian Standards..."
+              placeholder={t('copilotInputPlaceholder', 'Ask any question on Indian Standards...')}
               value={copilotInput}
               onChange={(e) => setCopilotInput(e.target.value)}
               onKeyDown={(e) => {
@@ -1251,6 +1253,7 @@ export default function Page() {
               style={{ padding: '8px 12px' }}
               onClick={() => handleSendCopilotMessage()}
               disabled={copilotLoading || !copilotInput.trim()}
+              aria-label={t('copilotSend', 'Send')}
             >
               <Send size={14} />
             </button>
@@ -1473,6 +1476,8 @@ function Dashboard({
   recentAnalyses: any[]
   onSelectHistoryAnalysis: (analysis: any) => void
 }) {
+  const { t } = useLanguage()
+
   return (
     <>
       <section className="hero-banner-card glass-card">
@@ -1497,12 +1502,12 @@ function Dashboard({
           </p>
           <div className="hero-actions">
             <button className="primary-button hero-primary-btn" onClick={onAnalyze}>
-              <span>Analyze Specification</span>
+              <span>{t('startAnalysis', 'Analyze Specification')}</span>
               <ArrowRight size={15} />
             </button>
             <button className="secondary-button hero-secondary-btn" onClick={() => go('finder')}>
               <Search size={15} />
-              <span>Browse Catalog ({standardsCount} Standards)</span>
+              <span>{t('standardsFinder', 'Browse Catalog')} ({standardsCount} {t('standards', 'Standards')})</span>
             </button>
           </div>
         </div>
@@ -1510,7 +1515,7 @@ function Dashboard({
 
       {/* QUICK PREFILLED DEMO EXAMPLES CHIPS (FEATURE 15) */}
       <div className="section-title">
-        <span>Try an Example Specification</span>
+        <span>{t('sampleTenders', 'Try an Example Specification')}</span>
         <small style={{ color: 'var(--text-secondary)', marginLeft: 8, fontSize: 13 }}>
           (Verified Authentic Indian Standards Scenarios)
         </small>
@@ -1561,10 +1566,10 @@ function Dashboard({
 
       <section className="start-task-grid">
         {[
-          { icon: Search, title: 'Find Standards', desc: `Search ${standardsCount} verified Indian Standards across 5 core procurement sectors`, onClick: () => go('finder') },
-          { icon: FileText, title: 'Analyze Specification', desc: 'Paste text or upload PDF/DOCX tender specification for automated analysis', onClick: onAnalyze },
-          { icon: ShieldCheck, title: 'Compliance & QCO Audit', desc: 'Verify mandatory BIS ISI and CRS statutory orders before issuing tenders', onClick: () => go('compliance') },
-          { icon: Scale, title: 'Compare Standards', desc: 'Review scopes, tests, and version history across multiple shortlisted standards', onClick: () => go('comparison') },
+          { icon: Search, title: t('standardsFinder', 'Find Standards'), desc: `Search ${standardsCount} verified Indian Standards across 5 core procurement sectors`, onClick: () => go('finder') },
+          { icon: FileText, title: t('analyzer', 'Analyze Specification'), desc: 'Paste text or upload PDF/DOCX tender specification for automated analysis', onClick: onAnalyze },
+          { icon: ShieldCheck, title: t('complianceQCO', 'Compliance & QCO Audit'), desc: 'Verify mandatory BIS ISI and CRS statutory orders before issuing tenders', onClick: () => go('compliance') },
+          { icon: Scale, title: t('comparison', 'Compare Standards'), desc: 'Review scopes, tests, and version history across multiple shortlisted standards', onClick: () => go('comparison') },
         ].map(({ icon: Icon, title, desc, onClick }) => (
           <GlassCard key={title} className="task-card" onClick={onClick}>
             <div className="task-icon">
@@ -1585,10 +1590,10 @@ function Dashboard({
           <div className="card-heading">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <History size={16} style={{ color: 'var(--primary-blue)' }} />
-              <h3>Analysis History</h3>
+              <h3>{t('analysisHistory', 'Analysis History')}</h3>
             </div>
             <button className="text-link" onClick={() => go('reports')}>
-              View All Reports <ArrowRight size={12} />
+              {t('reports', 'View All Reports')} <ArrowRight size={12} />
             </button>
           </div>
           <div className="activity-list">
@@ -1679,6 +1684,7 @@ function Finder({
   standards: VerifiedStandard[]
   onSelect: (s: VerifiedStandard) => void
 }) {
+  const { t } = useLanguage()
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
 
   const categories = ['All', 'Civil & Construction', 'Electrical & Lighting', 'Safety & PPE', 'Piping & Water Supply', 'Fire Safety']
@@ -1700,7 +1706,7 @@ function Finder({
           <div className="hero-badge">
             <span className="pulse-dot" /> VERIFIED BIS CATALOG SEARCH
           </div>
-          <h2>Find applicable Indian Standards.</h2>
+          <h2>{t('standardsFinder', 'Find applicable Indian Standards.')}</h2>
           <p>
             Explore our carefully verified dataset of authentic Indian Standards covering Civil, Electrical, Safety, Piping, and Fire Protection.
           </p>
@@ -1713,7 +1719,7 @@ function Finder({
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search standards (e.g., IS 456, IS 10322, TMT steel, concrete mix, safety helmet)..."
+            placeholder={t('searchPlaceholder', 'Search standards (e.g., IS 456, IS 10322, TMT steel, concrete mix, safety helmet)...')}
             aria-label="Search standards"
           />
           {search && (
@@ -1770,7 +1776,7 @@ function Finder({
                 <span>match</span>
               </div>
               <button className="secondary-button" onClick={() => onSelect(standard)}>
-                View details <ArrowRight size={15} />
+                {t('viewDetails', 'View details')} <ArrowRight size={15} />
               </button>
             </div>
           </GlassCard>
@@ -1826,8 +1832,19 @@ function Analyzer({
   onRemoveFile: () => void
   go: (v: View) => void
 }) {
+  const { t } = useLanguage()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragOver, setIsDragOver] = useState(false)
+
+  const progressKeys: Array<keyof TranslationDictionary> = [
+    'readingSpecification',
+    'extractingRequirements',
+    'findingRelevantStandards',
+    'checkingRelatedStandards',
+    'checkingVersionsAmendments',
+    'checkingCertificationRequirements',
+    'generatingReport',
+  ]
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
@@ -1844,7 +1861,7 @@ function Analyzer({
           <div className="hero-badge">
             <span className="pulse-dot" /> SPECIFICATION INTELLIGENCE
           </div>
-          <h2>Analyze a procurement specification.</h2>
+          <h2>{t('analyzer', 'Analyze a procurement specification.')}</h2>
           <p>
             Paste your tender specification or upload a document (PDF, DOCX) to extract engineering parameters, identify applicable Indian Standards, and audit statutory compliance.
           </p>
@@ -1858,7 +1875,7 @@ function Analyzer({
           <div className="progress-orb">
             <Sparkles size={28} />
           </div>
-          <h3>Analyzing specification against Indian Standards...</h3>
+          <h3>{t('readingSpecification', 'Analyzing specification against Indian Standards...')}</h3>
           <p>IS-Guide AI is executing grounded requirement extraction and relationship traversal.</p>
           <div className="progress-steps" style={{ maxWidth: 840, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
             {PROGRESS_STEPS.map((step, i) => {
@@ -1894,7 +1911,7 @@ function Analyzer({
                     {isDone ? <Check size={13} /> : isCurrent ? <Loader2 size={13} className="animate-spin" /> : i + 1}
                   </div>
                   <span style={{ fontSize: 13, fontWeight: isCurrent ? 700 : 500, color: isCurrent ? 'var(--primary-blue)' : isDone ? 'var(--text-main)' : 'var(--text-muted)' }}>
-                    {step}
+                    {t(progressKeys[i] || 'readingSpecification', step)}
                   </span>
                 </div>
               )
@@ -1968,7 +1985,7 @@ function Analyzer({
             <GlassCard style={{ padding: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <Sparkles size={16} style={{ color: 'var(--primary-blue)' }} />
-                <h3 style={{ fontSize: 14, margin: 0 }}>SIH Demo Specifications</h3>
+                <h3 style={{ fontSize: 14, margin: 0 }}>{t('sampleTenders', 'SIH Demo Specifications')}</h3>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {PREFILLED_EXAMPLES.map((ex) => (
@@ -2004,7 +2021,7 @@ function Analyzer({
             <div className="paste-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <FileText size={19} />
-                <h3 style={{ margin: 0 }}>Tender / Procurement Specification</h3>
+                <h3 style={{ margin: 0 }}>{t('technicalSpecification', 'Tender / Procurement Specification')}</h3>
               </div>
               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Plain Text · PDF · DOCX</span>
             </div>
@@ -2044,10 +2061,10 @@ function Analyzer({
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                 <CloudUpload size={24} style={{ color: 'var(--primary-blue)' }} />
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>
-                  Drag & drop tender PDF / DOCX here, or <span style={{ color: 'var(--primary-blue)', textDecoration: 'underline' }}>browse</span>
+                  {t('dragDropTender', 'Drag & drop tender PDF / DOCX here, or browse')}
                 </span>
                 <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  Server-side safe text extraction (up to 10MB)
+                  {t('serverSideExtractionNote', 'Server-side safe text extraction (up to 10MB)')}
                 </span>
               </div>
             </div>
@@ -2056,7 +2073,7 @@ function Analyzer({
             {isUploading && (
               <div style={{ marginBottom: 12, padding: 10, borderRadius: 6, background: 'rgba(37, 99, 235, 0.08)', border: '1px solid var(--line-subtle)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                  <span>Extracting text from tender document...</span>
+                  <span>{t('extractingDocument', 'Extracting text from tender document...')}</span>
                   <strong>{uploadProgress}%</strong>
                 </div>
                 <div style={{ height: 4, borderRadius: 2, background: '#E2E8F0', overflow: 'hidden' }}>
@@ -2091,7 +2108,7 @@ function Analyzer({
                   onClick={onRemoveFile}
                   className="icon-button"
                   style={{ width: 24, height: 24 }}
-                  aria-label="Remove uploaded file"
+                  aria-label={t('remove', 'Remove uploaded file')}
                 >
                   <X size={14} />
                 </button>
@@ -2120,7 +2137,7 @@ function Analyzer({
 
             <div style={{ marginBottom: 12 }}>
               <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
-                Tender / Specification Title
+                {t('specTitleLabel', 'Tender / Specification Title')}
               </label>
               <input
                 type="text"
@@ -2143,7 +2160,7 @@ function Analyzer({
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
-                  Specification Content / Paste Specification
+                  {t('pasteSpecification', 'Specification Content / Paste Specification')}
                 </label>
                 {selectedLanguage !== 'en' && (
                   <span style={{ fontSize: 11, color: 'var(--primary-blue)', fontWeight: 600 }}>
@@ -2155,7 +2172,7 @@ function Analyzer({
                 value={specText}
                 onChange={(e) => setSpecText(e.target.value)}
                 rows={9}
-                placeholder="Paste tender specifications, product parameters, dimensions, ratings, or test procedures..."
+                placeholder={t('specTextPlaceholder', 'Paste tender specifications, product parameters, dimensions, ratings, or test procedures...')}
                 style={{
                   width: '100%',
                   padding: 12,
@@ -2193,11 +2210,11 @@ function Analyzer({
             )}
 
             <button className="primary-button full" onClick={onStartAnalysis}>
-              Analyze Specification <Sparkles size={16} />
+              {t('startAnalysis', 'Analyze Specification')} <Sparkles size={16} />
             </button>
 
             <p className="helper-text" style={{ marginTop: 10, fontSize: 11, textAlign: 'center' }}>
-              Recommendations are evaluated against verified Bureau of Indian Standards (BIS) records.
+              {t('verifiedSourceNotice', 'Recommendations are evaluated against verified Bureau of Indian Standards (BIS) records.')}
             </p>
           </GlassCard>
         </div>
@@ -2220,6 +2237,7 @@ function Recommendations({
   onImproveSpecification: (clause: string) => void
   go: (v: View) => void
 }) {
+  const { t } = useLanguage()
   const [expandedRecId, setExpandedRecId] = useState<string | null>(analysis?.recommendations?.[0]?.id || null)
   const [showImproveGaps, setShowImproveGaps] = useState(false)
 
@@ -2273,7 +2291,7 @@ function Recommendations({
           </p>
         </div>
         <div className="confidence">
-          <span>SYSTEM RELEVANCE SCORE</span>
+          <span>{t('systemRelevance', 'SYSTEM RELEVANCE SCORE')}</span>
           <strong>{topScore}%</strong>
           <div className="confidence-bar">
             <i style={{ width: `${topScore}%` }} />
@@ -2290,7 +2308,7 @@ function Recommendations({
           <div>
             <div className="eyebrow">FEATURE 4 · SPECIFICATION COMPLETENESS</div>
             <h3 style={{ fontSize: 16, margin: '2px 0 0', color: 'var(--text-main)' }}>
-              Specification Completeness: {completeness.scorePercent}%
+              {t('completenessScore', 'Specification Completeness')}: {completeness.scorePercent}%
             </h3>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -2302,7 +2320,7 @@ function Recommendations({
               style={{ padding: '6px 12px', fontSize: 12 }}
               onClick={() => setShowImproveGaps(!showImproveGaps)}
             >
-              {showImproveGaps ? 'Hide Suggestions' : 'Improve Specification'} <Lightbulb size={13} />
+              {showImproveGaps ? t('close', 'Hide Suggestions') : t('improveSpecification', 'Improve Specification')} <Lightbulb size={13} />
             </button>
           </div>
         </div>
@@ -2323,7 +2341,7 @@ function Recommendations({
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
           <div>
             <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--soft-green)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
-              IDENTIFIED SPECIFICATION CLAUSES ({completeness.identifiedClauses?.length || 0})
+              {t('matchedRequirements', 'IDENTIFIED SPECIFICATION CLAUSES').toUpperCase()} ({completeness.identifiedClauses?.length || 0})
             </span>
             {completeness.identifiedClauses?.map((item: string, idx: number) => (
               <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 4, color: 'var(--text-main)' }}>
@@ -2335,7 +2353,7 @@ function Recommendations({
 
           <div>
             <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--soft-orange)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
-              POTENTIAL SPECIFICATION GAPS ({completeness.potentialGaps?.length || 0})
+              {t('specificationGaps', 'POTENTIAL SPECIFICATION GAPS').toUpperCase()} ({completeness.potentialGaps?.length || 0})
             </span>
             {completeness.potentialGaps && completeness.potentialGaps.length > 0 ? (
               completeness.potentialGaps.map((gap: any, idx: number) => (
@@ -2386,7 +2404,7 @@ function Recommendations({
                     style={{ fontSize: 11, padding: '4px 10px', flexShrink: 0 }}
                     onClick={() => onImproveSpecification(gap.suggestedClause)}
                   >
-                    + Add to Tender Spec
+                    + {t('improveSpecification', 'Add to Tender Spec')}
                   </button>
                 </div>
               ))}
@@ -2401,7 +2419,7 @@ function Recommendations({
           <div>
             <div className="eyebrow">FEATURE 3 · STRUCTURED PARAMETERS</div>
             <h3 style={{ fontSize: 15, margin: 0, color: 'var(--text-main)' }}>
-              Organized Requirement Extraction ({reqs.length} Parameters)
+              {t('identifiedRequirements', 'Organized Requirement Extraction')} ({reqs.length} Parameters)
             </h3>
           </div>
           <StatusBadge tone="green">
@@ -2449,8 +2467,8 @@ function Recommendations({
       {/* RECOMMENDATION RESULTS (FEATURES 5 & 18) */}
       <div className="section-heading compact">
         <div>
-          <div className="eyebrow">PRIMARY RECOMMENDATIONS</div>
-          <h3>Ranked Applicable Indian Standards ({recs.length})</h3>
+          <div className="eyebrow">{t('recommendedStandards', 'PRIMARY RECOMMENDATIONS')}</div>
+          <h3>{t('recommendedStandards', 'Ranked Applicable Indian Standards')} ({recs.length})</h3>
         </div>
         <StatusBadge tone="green">
           <Check size={13} /> Verified BIS Ground Truth
@@ -2467,7 +2485,7 @@ function Recommendations({
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div className="standard-code">{std.standardNumber}</div>
-                    {rec.isMandatory && <StatusBadge tone="amber">Mandatory Conformity</StatusBadge>}
+                    {rec.isMandatory && <StatusBadge tone="amber">{t('statusMandatory', 'Mandatory Conformity')}</StatusBadge>}
                   </div>
                   <h3>{std.title}</h3>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 4 }}>
@@ -2478,7 +2496,7 @@ function Recommendations({
                 </div>
                 <div className="score">
                   <strong>{rec.systemRelevanceScorePercent}%</strong>
-                  <span>{rec.scoreLabel || 'System relevance score'}</span>
+                  <span>{rec.scoreLabel || t('systemRelevance', 'System relevance score')}</span>
                 </div>
               </div>
 
@@ -2493,7 +2511,7 @@ function Recommendations({
               <div className="why-box" style={{ marginTop: 12 }}>
                 <Lightbulb size={17} />
                 <div>
-                  <strong>Why this standard was recommended:</strong>
+                  <strong>{t('whyRecommended', 'Why this standard was recommended')}:</strong>
                   <p>{rec.reason}</p>
                 </div>
               </div>
@@ -2501,7 +2519,7 @@ function Recommendations({
               {/* Matched Requirements */}
               <div style={{ marginTop: 14 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                  MATCHED TECHNICAL CLAUSES & EVIDENCE
+                  {t('matchedRequirements', 'MATCHED TECHNICAL CLAUSES & EVIDENCE')}
                 </div>
                 <div className="matched-grid">
                   {rec.evidence?.map((ev: any, i: number) => (
@@ -2562,13 +2580,13 @@ function Recommendations({
                   {/* Related Standards Tree (Feature 6) */}
                   <div>
                     <strong style={{ fontSize: 13, color: 'var(--text-main)', display: 'block', marginBottom: 8 }}>
-                      Related & Allied Standards (Standard Relationships)
+                      {t('relatedStandards', 'Related & Allied Standards (Standard Relationships)')}
                     </strong>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
                       {rec.relatedStandards?.normativeReferences?.length > 0 && (
                         <div style={{ padding: 10, borderRadius: 8, background: 'rgba(255, 255, 255, 0.6)', border: '1px solid var(--line-subtle)' }}>
                           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary-blue)', display: 'block', marginBottom: 4 }}>
-                            NORMATIVE REFERENCES
+                            {t('normativeReferences', 'NORMATIVE REFERENCES')}
                           </span>
                           {rec.relatedStandards.normativeReferences.map((r: any, ri: number) => (
                             <div key={ri} style={{ fontSize: 12, marginBottom: 4 }}>
@@ -2582,7 +2600,7 @@ function Recommendations({
                       {rec.relatedStandards?.testMethods?.length > 0 && (
                         <div style={{ padding: 10, borderRadius: 8, background: 'rgba(255, 255, 255, 0.6)', border: '1px solid var(--line-subtle)' }}>
                           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--soft-green)', display: 'block', marginBottom: 4 }}>
-                            TEST METHODS & LAB TESTING
+                            {t('testMethods', 'TEST METHODS & LAB TESTING')}
                           </span>
                           {rec.relatedStandards.testMethods.map((r: any, ri: number) => (
                             <div key={ri} style={{ fontSize: 12, marginBottom: 4 }}>
@@ -2596,7 +2614,7 @@ function Recommendations({
                       {rec.relatedStandards?.safetyStandards?.length > 0 && (
                         <div style={{ padding: 10, borderRadius: 8, background: 'rgba(255, 255, 255, 0.6)', border: '1px solid var(--line-subtle)' }}>
                           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--soft-orange)', display: 'block', marginBottom: 4 }}>
-                            SAFETY & PROTECTION STANDARDS
+                            {t('safetyStandards', 'SAFETY & PROTECTION STANDARDS')}
                           </span>
                           {rec.relatedStandards.safetyStandards.map((r: any, ri: number) => (
                             <div key={ri} style={{ fontSize: 12, marginBottom: 4 }}>
@@ -2613,7 +2631,7 @@ function Recommendations({
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
                     <div style={{ padding: 10, borderRadius: 8, background: 'rgba(255, 255, 255, 0.6)', border: '1px solid var(--line-subtle)' }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                        CURRENCY & VERSION STATUS
+                        {t('currentVersion', 'CURRENCY & VERSION STATUS')}
                       </span>
                       <div style={{ fontSize: 12 }}>
                         Current Edition: <strong>{std.currentVersion?.versionLabel || 'Latest Edition'}</strong>
@@ -2630,7 +2648,7 @@ function Recommendations({
 
                     <div style={{ padding: 10, borderRadius: 8, background: 'rgba(255, 255, 255, 0.6)', border: '1px solid var(--line-subtle)' }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
-                        AMENDMENTS APPLIED ({std.amendments?.length || 0})
+                        {t('amendments', 'AMENDMENTS APPLIED')} ({std.amendments?.length || 0})
                       </span>
                       {std.amendments && std.amendments.length > 0 ? (
                         std.amendments.map((a: any, ai: number) => (
@@ -2653,7 +2671,7 @@ function Recommendations({
                   className="secondary-button"
                   onClick={() => setExpandedRecId(isExpanded ? null : rec.id)}
                 >
-                  {isExpanded ? 'Collapse Details' : 'Expand Related & Version Info'}
+                  {isExpanded ? t('close', 'Collapse Details') : t('viewDetails', 'Expand Related & Version Info')}
                   <ChevronDown size={14} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                 </button>
                 <Link
@@ -2661,10 +2679,10 @@ function Recommendations({
                   className="secondary-button"
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 >
-                  View Standard Details <ExternalLink size={13} />
+                  {t('viewDetails', 'View Standard Details')} <ExternalLink size={13} />
                 </Link>
                 <button className="primary-button" onClick={() => go('reports')}>
-                  View Full Report <FileText size={15} />
+                  {t('generateReport', 'View Full Report')} <FileText size={15} />
                 </button>
               </div>
             </GlassCard>
@@ -2715,16 +2733,17 @@ function RelationshipGraph({
   recs: any[]
   onSelectStandard: (s: VerifiedStandard) => void
 }) {
+  const { t } = useLanguage()
   const primaryRec = recs[0]
   const primaryStdNumber = primaryRec?.standard?.standardNumber || 'IS 10322'
 
   const relatedNodes = [
-    { label: 'Normative References', count: primaryRec?.relatedStandards?.normativeReferences?.length || 2 },
-    { label: 'Test Methods (IP Code)', count: primaryRec?.relatedStandards?.testMethods?.length || 1 },
-    { label: 'Safety & Surge Protection', count: primaryRec?.relatedStandards?.safetyStandards?.length || 1 },
-    { label: 'Installation & Wiring', count: primaryRec?.relatedStandards?.installationStandards?.length || 1 },
-    { label: 'Quality Control Orders', count: 1 },
-    { label: 'Allied Product Standards', count: Math.max(recs.length - 1, 1) },
+    { label: t('normativeReferences', 'Normative References'), count: primaryRec?.relatedStandards?.normativeReferences?.length || 2 },
+    { label: t('testMethods', 'Test Methods (IP Code)'), count: primaryRec?.relatedStandards?.testMethods?.length || 1 },
+    { label: t('safetyStandards', 'Safety & Surge Protection'), count: primaryRec?.relatedStandards?.safetyStandards?.length || 1 },
+    { label: t('installationStandards', 'Installation & Wiring'), count: primaryRec?.relatedStandards?.installationStandards?.length || 1 },
+    { label: t('certificationCompliance', 'Quality Control Orders'), count: 1 },
+    { label: t('relatedStandards', 'Allied Product Standards'), count: Math.max(recs.length - 1, 1) },
   ]
 
   return (
@@ -2732,10 +2751,10 @@ function RelationshipGraph({
       <div className="card-heading">
         <div>
           <div className="eyebrow">FEATURE 6 · EVIDENCE GRAPH</div>
-          <h3>Related & Allied Standards Graph</h3>
+          <h3>{t('relatedStandards', 'Related & Allied Standards Graph')}</h3>
           <p className="section-note">Normative references, testing standards, and safety dependencies linked in verified BIS catalog.</p>
         </div>
-        <StatusBadge tone="blue">Verified Relationship Tree</StatusBadge>
+        <StatusBadge tone="blue">{t('relatedStandards', 'Verified Relationship Tree')}</StatusBadge>
       </div>
       <div className="relationship-visual">
         <div className="graph-line line-a" />
@@ -2783,6 +2802,7 @@ function RelationshipGraph({
 // 6. SPECIFICATION GAPS COMPONENT (FEATURE 4)
 // ==============================================================================
 function Gaps({ warnings, completeness, go }: { warnings: string[]; completeness: any; go: (v: View) => void }) {
+  const { t } = useLanguage()
   const gapsList = completeness?.potentialGaps || []
   const displayWarnings =
     warnings && warnings.length > 0
@@ -2797,7 +2817,7 @@ function Gaps({ warnings, completeness, go }: { warnings: string[]; completeness
       <div className="card-heading">
         <div>
           <div className="eyebrow">FEATURE 4 · SPECIFICATION AUDIT</div>
-          <h3>Potential Specification Gaps & Observations</h3>
+          <h3>{t('specificationGaps', 'Potential Specification Gaps & Observations')}</h3>
         </div>
         <AlertTriangle size={19} className="amber-icon" />
       </div>
@@ -2826,7 +2846,7 @@ function Gaps({ warnings, completeness, go }: { warnings: string[]; completeness
       </div>
 
       <button className="secondary-button full" style={{ marginTop: 12 }} onClick={() => go('analyzer')}>
-        Refine Specification <ArrowRight size={15} />
+        {t('improveSpecification', 'Refine Specification')} <ArrowRight size={15} />
       </button>
     </GlassCard>
   )
@@ -2836,6 +2856,7 @@ function Gaps({ warnings, completeness, go }: { warnings: string[]; completeness
 // 7. COMPLIANCE SUMMARY COMPONENT (FEATURE 9)
 // ==============================================================================
 function ComplianceSummary({ certs, go }: { certs: any[]; go: (v: View) => void }) {
+  const { t } = useLanguage()
   const displayCerts =
     certs && certs.length > 0
       ? certs
@@ -2850,9 +2871,9 @@ function ComplianceSummary({ certs, go }: { certs: any[]; go: (v: View) => void 
       <div className="card-heading">
         <div>
           <div className="eyebrow">FEATURE 9 · STATUTORY COMPLIANCE</div>
-          <h3>Certification & QCO Status</h3>
+          <h3>{t('certificationCompliance', 'Certification & QCO Status')}</h3>
         </div>
-        <StatusBadge tone="green">Verified Schemes</StatusBadge>
+        <StatusBadge tone="green">{t('certificationCompliance', 'Verified Schemes')}</StatusBadge>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
@@ -2887,7 +2908,7 @@ function ComplianceSummary({ certs, go }: { certs: any[]; go: (v: View) => void 
       </div>
 
       <button className="secondary-button full" style={{ marginTop: 14 }} onClick={() => go('compliance')}>
-        Full Compliance Details <ArrowRight size={15} />
+        {t('viewDetails', 'Full Compliance Details')} <ArrowRight size={15} />
       </button>
     </GlassCard>
   )
@@ -2897,14 +2918,15 @@ function ComplianceSummary({ certs, go }: { certs: any[]; go: (v: View) => void 
 // 8. COMPARISON COMPONENT
 // ==============================================================================
 function Comparison({ standardsCatalog }: { standardsCatalog: VerifiedStandard[] }) {
+  const { t } = useLanguage()
   return (
     <>
       <div className="page-intro">
         <div>
           <div className="hero-badge">
-            <span className="pulse-dot" /> SIDE-BY-SIDE ANALYSIS
+            <span className="pulse-dot" /> {t('comparison', 'SIDE-BY-SIDE ANALYSIS')}
           </div>
-          <h2>Compare standards with confidence.</h2>
+          <h2>{t('comparison', 'Compare standards with confidence.')}</h2>
           <p>Review scopes, test methods, safety requirements, and version status across shortlisted Indian Standards.</p>
         </div>
       </div>
@@ -2917,7 +2939,7 @@ function Comparison({ standardsCatalog }: { standardsCatalog: VerifiedStandard[]
         </div>
         <div className="comparison-table">
           <div className="comparison-row comparison-head">
-            <span>Requirement</span>
+            <span>{t('matchedRequirements', 'Requirement')}</span>
             <strong>IS 456 (RCC)</strong>
             <strong>IS 1786 (TMT)</strong>
             <strong>IS 4926 (RMC)</strong>
@@ -2949,24 +2971,25 @@ function Comparison({ standardsCatalog }: { standardsCatalog: VerifiedStandard[]
 // 9. COMPLIANCE VIEW COMPONENT (FEATURE 9)
 // ==============================================================================
 function Compliance({ certifications }: { certifications?: any[] }) {
+  const { t } = useLanguage()
   const certItems = [
     {
       name: 'BIS Product Certification Scheme (ISI Mark)',
-      status: 'Mandatory / Identified',
+      status: t('statusMandatory', 'Mandatory / Identified'),
       desc: 'Third-party quality guarantee under Scheme-I of BIS regulations. Products must carry official CM/L license number and ISI standard mark on packaging.',
       tone: 'amber',
       icon: ShieldCheck,
     },
     {
       name: 'Compulsory Registration Scheme (CRS)',
-      status: 'Mandatory / Identified',
+      status: t('statusMandatory', 'Mandatory / Identified'),
       desc: 'Mandatory self-declaration of conformity under BIS Scheme-II for IT and electronic luminaires governed by MeitY statutory notifications.',
       tone: 'amber',
       icon: ClipboardCheck,
     },
     {
       name: 'Quality Control Order (QCO)',
-      status: 'Active Statutory Order',
+      status: t('statusActive', 'Active Statutory Order'),
       desc: 'Statutory orders issued by Government of India making BIS compliance compulsory for public safety, consumer health, and infrastructure durability.',
       tone: 'green',
       icon: Check,
@@ -2987,7 +3010,7 @@ function Compliance({ certifications }: { certifications?: any[] }) {
           <div className="hero-badge">
             <span className="pulse-dot" /> FEATURE 9 · COMPLIANCE SIGNALS & QCO DIRECTORY
           </div>
-          <h2>Know what requires mandatory verification.</h2>
+          <h2>{t('certificationCompliance', 'Know what requires mandatory verification.')}</h2>
           <p>Surface statutory Quality Control Orders (QCO) and BIS certification requirements before releasing tender documents.</p>
         </div>
       </div>
@@ -3031,6 +3054,7 @@ function Reports({
   recentAnalyses: any[]
   onLoadAnalysis: (analysis: any) => void
 }) {
+  const { t } = useLanguage()
   const rep = analysis?.report || {
     title: `Procurement Standards Compliance Report — ${analysis?.title || 'Tender Specification'}`,
     summary:
@@ -3056,12 +3080,12 @@ function Reports({
           <div className="hero-badge">
             <span className="pulse-dot" /> FEATURE 12 & 13 · OFFICIAL PROCUREMENT REPORT
           </div>
-          <h2>Standards Recommendation Report.</h2>
-          <p>Package standards, relationships, gaps, and compliance checks into an accountable procurement audit record.</p>
+          <h2>{t('procurementReports', 'Standards Recommendation Report.')}</h2>
+          <p>{t('procurementReports', 'Package standards, relationships, gaps, and compliance checks into an accountable procurement audit record.')}</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button className="primary-button" onClick={handlePrintOrPdf}>
-            <Printer size={15} /> Download PDF / Print
+            <Printer size={15} /> {t('downloadPDF', 'Download PDF / Print')}
           </button>
         </div>
       </div>
@@ -3070,7 +3094,7 @@ function Reports({
       {recentAnalyses && recentAnalyses.length > 0 && (
         <div className="no-print" style={{ marginBottom: 18 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>
-            Reopen Past Analyses (Feature 14 — Analysis History):
+            {t('analysisHistory', 'Reopen Past Analyses (Feature 14 — Analysis History):')}
           </div>
           <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6 }}>
             {recentAnalyses.map((an) => (
